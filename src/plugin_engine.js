@@ -152,16 +152,16 @@ module.exports = function createPluginEngine(root, config, log) {
     pluginDirectory(id);
 
     const current = config.read();
-    const list = new Set(current.enabledPlugins || []);
+    const enabledIds = new Set(current.enabledPlugins || []);
 
     if (enabled) {
-      list.add(id);
+      enabledIds.add(id);
     } else {
-      list.delete(id);
+      enabledIds.delete(id);
       loaded.delete(id);
     }
 
-    current.enabledPlugins = Array.from(list);
+    current.enabledPlugins = Array.from(enabledIds);
     config.write(current);
 
     if (enabled) {
