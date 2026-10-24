@@ -3,332 +3,477 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const url = require('url');
+const { URL } = require('url');
 
-const makeConfig = require('./config_manager');
-const makeLogger = require('./logger');
-const makePlugins = require('./plugin_engine');
+const createConfigManager = require('./config_manager');
+const createLogger = require('./logger');
+const createPluginEngine = require('./plugin_engine');
 const proxy = require('./proxy');
 
 function start(root) {
-  const config = makeConfig(root);
-  const log = makeLogger(root);
-  const plugins = makePlugins(root, config, log);
-  const counts = new Map();
+  const config = createConfigManager(root);
+  const log = createLogger(root);
+  const plugins = createPluginEngine(root, config, log);
+  const requestCounts = new Map();
   const historyFile = path.join(root, 'config', 'history.json');
 
   plugins.init();
 
-  function send(res, status, obj) {
-    if (res.writableEnded) return;
-    res.writeHead(status, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'no-store'
-    });
-    res.end(JSON.stringify(obj));
-  }
-
-  function readBody(req) {
-    return new Promise((resolve, reject) => {
-      let body = '';
-      let size = 0;
-
-      req.on('data', chunk => {
-        size += chunk.length;
-        if (size > 5 * 1024 * 1024) {
-          reject(new Error('Request body too large'));
-          req.destroy();
-          return;
-        }
-        body += chunk;
-      });
-
-      req.on('end', () => {
-        try {
-          resolve(body ? JSON.parse(body) : {});
-        } catch (_) {
-          reject(new Error('Invalid JSON'));
-        }
-      });
-
-      req.on('error', reject);
-    });
-  }
-
-  function authorized(req, cfg) {
-    if (!cfg.webPassword) return true;
-    const auth = req.headers.authorization || '';
-    return auth === 'Bearer ' + cfg.webPassword ||
-      req.headers['x-web-password'] === cfg.webPassword;
-  }
-
-  function rateAllowed(req) {
-    const ip = req.socket.remoteAddress || 'unknown';
-    const now = Date.now();
-    const recent = (counts.get(ip) || []).filter(time => now - time < 60000);
-
-    if (recent.length >= 60) {
-      counts.set(ip, recent);
-      return false;
-    }
-
-    recent.push(now);
-    counts.set(ip, recent);
-    return true;
-  }
-
-  const mime = {
+  const mimeTypes = {
     '.html': 'text/html; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
     '.js': 'text/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
-    '.svg': 'image/svg+xml'
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon'
   };
 
-  const server = http.createServer(async (req, res) => {
-    const parsed = url.parse(req.url, true);
-    let pathname;
+  function sendJSON(response, statusCode, data) {
+    if (response.writableEnded || response.destroyed) return;
 
-    try {
-      pathname = decodeURIComponent(parsed.pathname || '/');
-    } catch (_) {
-      return send(res, 400, { error: { message: 'Invalid URL path' } });
+    response.writeHead(statusCode, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    response.end(JSON.stringify(data));
+  }
+
+  function readJSON(request, maxBytes = 5 * 1024 * 1024) {
+    return new Promise((resolve, reject) => {
+      let size = 0;
+      const chunks = [];
+
+      request.on('data', chunk => {
+        size += chunk.length;
+
+        if (size > maxBytes) {
+          reject(Object.assign(new Error('请求体过大。'), { status: 413 }));
+          request.destroy();
+          return;
+        }
+
+        chunks.push(chunk);
+      });
+
+      request.on('end', () => {
+        if (size === 0) {
+          resolve({});
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        } catch (_) {
+          reject(Object.assign(new Error('请求内容不是有效的 JSON。'), { status: 400 }));
+        }
+      });
+
+      request.on('error', reject);
+    });
+  }
+
+  function isAuthorized(request, currentConfig) {
+    if (!currentConfig.webPassword) return true;
+
+    const authorization = request.headers.authorization || '';
+    return authorization === 'Bearer ' + currentConfig.webPassword
+      || request.headers['x-web-password'] === currentConfig.webPassword;
+  }
+
+  function isRateAllowed(request) {
+    const ip = request.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const recent = (requestCounts.get(ip) || [])
+      .filter(timestamp => now - timestamp < 60000);
+
+    if (recent.length >= 60) {
+      requestCounts.set(ip, recent);
+      return false;
     }
 
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
+    recent.push(now);
+    requestCounts.set(ip, recent);
+
+    if (requestCounts.size > 1000) {
+      for (const [key, values] of requestCounts) {
+        if (!values.some(timestamp => now - timestamp < 60000)) {
+          requestCounts.delete(key);
+        }
+      }
+    }
+
+    return true;
+  }
+
+  function safeConfig(currentConfig) {
+    return Object.assign({}, currentConfig, {
+      apiKey: '',
+      apiKeySet: Boolean(currentConfig.apiKey),
+      apiKeyHint: currentConfig.apiKey
+        ? '••••••••' + currentConfig.apiKey.slice(-4)
+        : ''
+    });
+  }
+
+  async function handleAPI(request, response, pathname) {
+    const currentConfig = config.read();
+
+    if (
+      (pathname.startsWith('/api/') || pathname.startsWith('/v1/')) &&
+      !isAuthorized(request, currentConfig)
+    ) {
+      sendJSON(response, 401, { error: { message: '网页访问密码不正确。' } });
+      return true;
+    }
+
+    if (pathname === '/api/config' && request.method === 'GET') {
+      sendJSON(response, 200, safeConfig(currentConfig));
+      return true;
+    }
+
+    if (pathname === '/api/config' && request.method === 'POST') {
+      const body = await readJSON(request);
+      const update = Object.assign({}, body);
+
+      // 空密钥代表保留原密钥；API Key 不会通过读取配置接口发回浏览器。
+      if (!update.apiKey) {
+        update.apiKey = currentConfig.apiKey;
+      }
+
+      delete update.apiKeySet;
+      delete update.apiKeyHint;
+
+      const allowed = [
+        'host',
+        'port',
+        'baseURL',
+        'apiKey',
+        'model',
+        'systemPrompt',
+        'webPassword',
+        'temperature',
+        'enabledPlugins'
+      ];
+      const filtered = {};
+
+      for (const key of allowed) {
+        if (Object.prototype.hasOwnProperty.call(update, key)) {
+          filtered[key] = update[key];
+        }
+      }
+
+      const next = config.write(filtered);
+      sendJSON(response, 200, {
+        ok: true,
+        config: safeConfig(next)
+      });
+      return true;
+    }
+
+    if (pathname === '/api/history' && request.method === 'GET') {
+      try {
+        const history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+        sendJSON(response, 200, Array.isArray(history) ? history : []);
+      } catch (_) {
+        sendJSON(response, 200, []);
+      }
+      return true;
+    }
+
+    if (pathname === '/api/history' && request.method === 'POST') {
+      const history = await readJSON(request);
+
+      if (!Array.isArray(history)) {
+        sendJSON(response, 400, { error: { message: '历史记录必须是数组。' } });
+        return true;
+      }
+
+      fs.writeFileSync(historyFile, JSON.stringify(history, null, 2) + '\n');
+      sendJSON(response, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname === '/api/plugins' && request.method === 'GET') {
+      sendJSON(response, 200, plugins.list());
+      return true;
+    }
+
+    const pluginMatch = pathname.match(/^\/api\/plugins\/([a-zA-Z0-9_-]+)\/(reload|enable|disable)$/);
+
+    if (pluginMatch && request.method === 'POST') {
+      const [, id, action] = pluginMatch;
+
+      try {
+        if (action === 'reload') {
+          sendJSON(response, 200, plugins.reload(id));
+        } else {
+          sendJSON(response, 200, plugins.setEnabled(id, action === 'enable'));
+        }
+      } catch (error) {
+        sendJSON(response, 400, { error: { message: error.message } });
+      }
+
+      return true;
+    }
+
+    if (pathname === '/api/test' && request.method === 'POST') {
+      const body = await readJSON(request);
+      const baseURL = body.baseURL || currentConfig.baseURL;
+      const apiKey = body.apiKey || currentConfig.apiKey;
+
+      try {
+        const result = await proxy.check(baseURL, apiKey);
+        let data;
+
+        try {
+          data = JSON.parse(result.body);
+        } catch (_) {
+          throw new Error('模型列表接口没有返回有效 JSON。地址：' + result.url);
+        }
+
+        sendJSON(response, 200, {
+          ok: true,
+          url: result.url,
+          rtt: Date.now() - request.startedAt,
+          count: Array.isArray(data.data) ? data.data.length : 0,
+          models: Array.isArray(data.data) ? data.data : []
+        });
+      } catch (error) {
+        sendJSON(response, error.status || 502, {
+          error: {
+            message: error.message,
+            url: error.url || ''
+          }
+        });
+      }
+
+      return true;
+    }
+
+    if (pathname === '/health' && request.method === 'GET') {
+      sendJSON(response, 200, {
+        ok: true,
+        node: process.version,
+        uptime: Math.floor(process.uptime()),
+        memoryMB: Math.round(process.memoryUsage().rss / 1048576),
+        pluginCount: plugins.list().length,
+        configured: Boolean(currentConfig.baseURL && currentConfig.apiKey),
+        model: currentConfig.model || ''
+      });
+      return true;
+    }
+
+    if (pathname === '/v1/models' && request.method === 'GET') {
+      try {
+        const result = await proxy.request(
+          proxy.endpointURL(currentConfig.baseURL, '/v1/models'),
+          {
+            method: 'GET',
+            headers: currentConfig.apiKey
+              ? { Authorization: 'Bearer ' + currentConfig.apiKey }
+              : {}
+          },
+          null,
+          20000
+        );
+
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store'
+        });
+        response.end(result.body);
+      } catch (error) {
+        sendJSON(response, error.status || 502, {
+          error: { message: error.message, url: error.url || '' }
+        });
+      }
+
+      return true;
+    }
+
+    if (pathname === '/v1/embeddings' && request.method === 'POST') {
+      if (!currentConfig.apiKey || !currentConfig.baseURL) {
+        sendJSON(response, 400, {
+          error: { message: '请先在设置中填写 Base URL 和 API Key。' }
+        });
+        return true;
+      }
+
+      const body = await readJSON(request);
+
+      try {
+        const result = await proxy.request(
+          proxy.endpointURL(currentConfig.baseURL, '/v1/embeddings'),
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + currentConfig.apiKey
+            }
+          },
+          JSON.stringify(body),
+          120000
+        );
+
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8'
+        });
+        response.end(result.body);
+      } catch (error) {
+        sendJSON(response, error.status || 502, {
+          error: { message: error.message, url: error.url || '' }
+        });
+      }
+
+      return true;
+    }
+
+    if (pathname === '/v1/chat/completions' && request.method === 'POST') {
+      if (!isRateAllowed(request)) {
+        sendJSON(response, 429, {
+          error: { message: '请求过于频繁，请稍后再试。' }
+        });
+        return true;
+      }
+
+      if (!currentConfig.baseURL || !currentConfig.apiKey) {
+        sendJSON(response, 400, {
+          error: { message: '请先在设置中填写 Base URL 和 API Key。' }
+        });
+        return true;
+      }
+
+      const input = await readJSON(request);
+      const payload = Object.assign({
+        model: currentConfig.model,
+        temperature: currentConfig.temperature
+      }, input);
+
+      if (!Array.isArray(payload.messages)) {
+        sendJSON(response, 400, {
+          error: { message: 'messages 必须是数组。' }
+        });
+        return true;
+      }
+
+      if (
+        currentConfig.systemPrompt &&
+        !payload.messages.some(message => message && message.role === 'system')
+      ) {
+        payload.messages.unshift({
+          role: 'system',
+          content: currentConfig.systemPrompt
+        });
+      }
+
+      const context = {
+        request: payload,
+        config: {
+          baseURL: currentConfig.baseURL,
+          model: currentConfig.model
+        }
+      };
+
+      plugins.hook('beforeRequest', context);
+      const abortSignal = {};
+
+      response.on('close', () => {
+        if (!response.writableEnded && abortSignal.onAbort) {
+          abortSignal.onAbort();
+        }
+      });
+
+      try {
+        await proxy.chat(currentConfig, context.request, response, abortSignal, log);
+        plugins.hook('afterResponse', {
+          request: context.request,
+          status: response.statusCode
+        });
+      } catch (error) {
+        log('ERROR', error.stack || error.message);
+
+        if (!response.headersSent) {
+          sendJSON(response, error.status || 502, {
+            error: {
+              message: error.message,
+              url: error.url || ''
+            }
+          });
+        } else if (!response.writableEnded) {
+          response.end();
+        }
+
+        plugins.hook('onRequestError', { error: error.message });
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  const server = http.createServer(async (request, response) => {
+    request.startedAt = Date.now();
+
+    let pathname;
+    try {
+      pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
+    } catch (_) {
+      sendJSON(response, 400, { error: { message: '请求路径无效。' } });
+      return;
+    }
+
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Web-Password',
         'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
       });
-      return res.end();
+      response.end();
+      return;
     }
 
     try {
-      const cfg = config.read();
+      if (await handleAPI(request, response, pathname)) return;
+    } catch (error) {
+      log('ERROR', error.stack || error.message);
 
-      if (pathname === '/health') {
-        return send(res, 200, {
-          ok: true,
-          node: process.version,
-          uptime: Math.floor(process.uptime()),
-          memoryMB: Math.round(process.memoryUsage().rss / 1048576),
-          plugins: plugins.list(),
-          baseURL: cfg.baseURL,
-          model: cfg.model
+      if (!response.headersSent) {
+        sendJSON(response, error.status || 500, {
+          error: { message: error.message }
         });
+      } else if (!response.writableEnded) {
+        response.end();
       }
+      return;
+    }
 
-      if (
-        (pathname.startsWith('/api/') || pathname.startsWith('/v1/')) &&
-        !authorized(req, cfg)
-      ) {
-        return send(res, 401, { error: { message: 'Unauthorized' } });
-      }
+    const publicDirectory = path.resolve(root, 'public');
+    const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);
+    const file = path.resolve(publicDirectory, relativePath);
 
-      if (pathname === '/api/config' && req.method === 'GET') {
-        const safeConfig = Object.assign({}, cfg, {
-          apiKey: cfg.apiKey ? '••••••••' + cfg.apiKey.slice(-4) : ''
-        });
-        return send(res, 200, safeConfig);
-      }
+    if (file !== publicDirectory && !file.startsWith(publicDirectory + path.sep)) {
+      sendJSON(response, 403, { error: { message: '禁止访问该路径。' } });
+      return;
+    }
 
-      if (pathname === '/api/config' && req.method === 'POST') {
-        const body = await readBody(req);
-        const previous = config.read();
-
-        if (body.apiKey && /^•/.test(body.apiKey)) {
-          body.apiKey = previous.apiKey;
-        }
-
-        config.write(Object.assign({}, previous, body));
-        return send(res, 200, { ok: true });
-      }
-
-      if (pathname === '/api/history' && req.method === 'GET') {
-        let history = [];
-        try {
-          history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
-        } catch (_) {}
-        return send(res, 200, history);
-      }
-
-      if (pathname === '/api/history' && req.method === 'POST') {
-        const history = await readBody(req);
-        fs.writeFileSync(
-          historyFile,
-          JSON.stringify(Array.isArray(history) ? history : [], null, 2)
-        );
-        return send(res, 200, { ok: true });
-      }
-
-      if (pathname === '/api/plugins' && req.method === 'GET') {
-        return send(res, 200, plugins.list());
-      }
-
-      if (
-        pathname.startsWith('/api/plugins/') &&
-        pathname.endsWith('/reload') &&
-        req.method === 'POST'
-      ) {
-        const id = pathname.split('/')[3];
-        try {
-          return send(res, 200, plugins.reload(id));
-        } catch (error) {
-          return send(res, 400, { error: { message: error.message } });
-        }
-      }
-
-      if (pathname === '/api/test' && req.method === 'POST') {
-        const test = await readBody(req);
-        const base = String(test.baseURL || cfg.baseURL || '').replace(/\/+$/, '');
-
-        if (!/^https?:\/\//i.test(base)) {
-          return send(res, 400, { error: { message: 'Invalid Base URL' } });
-        }
-
-        const startedAt = Date.now();
-        const authHeaders = test.apiKey
-          ? { Authorization: 'Bearer ' + test.apiKey }
-          : (cfg.apiKey ? { Authorization: 'Bearer ' + cfg.apiKey } : {});
-
-        const result = await proxy.json(base + '/v1/models', authHeaders, null);
-        return send(res, 200, {
-          ok: true,
-          rtt: Date.now() - startedAt,
-          count: (result.data || []).length,
-          models: result.data || []
-        });
-      }
-
-      if (pathname === '/v1/models' && req.method === 'GET') {
-        if (!cfg.baseURL) {
-          return send(res, 400, { error: { message: 'Configure Base URL first' } });
-        }
-
-        const base = cfg.baseURL.replace(/\/+$/, '');
-        const headers = cfg.apiKey
-          ? { Authorization: 'Bearer ' + cfg.apiKey }
-          : {};
-
-        return send(res, 200, await proxy.json(base + '/v1/models', headers, null));
-      }
-
-      if (pathname === '/v1/embeddings' && req.method === 'POST') {
-        const body = JSON.stringify(await readBody(req));
-        const base = String(cfg.baseURL || '').replace(/\/+$/, '');
-        const headers = { 'Content-Type': 'application/json' };
-
-        if (cfg.apiKey) headers.Authorization = 'Bearer ' + cfg.apiKey;
-
-        return send(
-          res,
-          200,
-          await proxy.json(base + '/v1/embeddings', headers, body)
-        );
-      }
-
-      if (pathname === '/v1/chat/completions' && req.method === 'POST') {
-        if (!rateAllowed(req)) {
-          return send(res, 429, {
-            error: { message: 'Rate limit exceeded (60 requests/minute)' }
-          });
-        }
-
-        if (!cfg.baseURL || !cfg.apiKey) {
-          return send(res, 400, {
-            error: { message: 'Set Base URL and API key in Settings first' }
-          });
-        }
-
-        const input = await readBody(req);
-        const payload = Object.assign({
-          model: cfg.model,
-          temperature: cfg.temperature
-        }, input);
-
-        if (!Array.isArray(payload.messages)) {
-          return send(res, 400, {
-            error: { message: 'messages must be an array' }
-          });
-        }
-
-        if (
-          cfg.systemPrompt &&
-          !payload.messages.some(message => message.role === 'system')
-        ) {
-          payload.messages.unshift({
-            role: 'system',
-            content: cfg.systemPrompt
-          });
-        }
-
-        const context = {
-          request: payload,
-          config: { baseURL: cfg.baseURL, model: cfg.model }
-        };
-
-        plugins.hook('beforeRequest', context);
-
-        const abort = {};
-        res.on('close', () => {
-          if (!res.writableEnded && abort.onAbort) abort.onAbort();
-        });
-
-        try {
-          await proxy.chat(cfg, context.request, res, abort, log);
-          plugins.hook('afterResponse', {
-            request: context.request,
-            status: res.statusCode
-          });
-        } catch (error) {
-          log('ERROR', error.stack || error.message);
-
-          if (!res.headersSent) {
-            send(res, error.status || 502, {
-              error: { message: error.message }
-            });
-          } else if (!res.writableEnded) {
-            res.end();
-          }
-
-          plugins.hook('onRequestError', { error: error.message });
-        }
-
+    fs.readFile(file, (error, content) => {
+      if (error) {
+        sendJSON(response, 404, { error: { message: '找不到页面或静态文件。' } });
         return;
       }
 
-      if (pathname.startsWith('/api/plugin/')) {
-        return send(res, 404, {
-          error: { message: 'No custom action route registered' }
-        });
-      }
-
-      const publicDir = path.resolve(root, 'public');
-      const file = path.resolve(publicDir, pathname === '/' ? 'index.html' : '.' + pathname);
-
-      if (file !== publicDir && !file.startsWith(publicDir + path.sep)) {
-        return send(res, 403, { error: { message: 'Forbidden' } });
-      }
-
-      fs.readFile(file, (error, data) => {
-        if (error) {
-          return send(res, 404, { error: { message: 'Not found' } });
-        }
-
-        res.writeHead(200, {
-          'Content-Type': mime[path.extname(file)] || 'application/octet-stream'
-        });
-        res.end(data);
+      response.writeHead(200, {
+        'Content-Type': mimeTypes[path.extname(file)] || 'application/octet-stream',
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': path.extname(file) === '.html' ? 'no-cache' : 'public, max-age=300'
       });
-    } catch (error) {
-      log('ERROR', error.stack || error.message);
-      send(res, 400, { error: { message: error.message } });
-    }
+      response.end(content);
+    });
   });
 
-  server.on('clientError', (error, socket) => {
+  server.on('clientError', (_, socket) => {
     try {
       socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
     } catch (_) {}
@@ -339,7 +484,7 @@ function start(root) {
   const port = Number(initialConfig.port) || 3001;
 
   server.listen(port, host, () => {
-    log('INFO', 'Listening on http://' + host + ':' + port);
+    log('INFO', '服务已启动：http://' + host + ':' + port);
     plugins.hook('onServerStart', { server });
   });
 
@@ -348,7 +493,7 @@ function start(root) {
   });
 
   process.on('unhandledRejection', error => {
-    log('ERROR', 'unhandled rejection: ' + error);
+    log('ERROR', '未处理的 Promise 异常：' + (error.stack || error.message || error));
   });
 
   return server;
