@@ -185,14 +185,14 @@ async function chat(config, payload, clientResponse, signal, log) {
       }
 
       if (!payload.stream) {
-        upstream.pipe(clientResponse);
-        upstream.on('end', resolve);
-        upstream.on('error', reject);
-        clientResponse.on('error', reject);
         clientResponse.writeHead(upstream.statusCode || 200, {
           'Content-Type': upstream.headers['content-type'] || 'application/json',
           'Cache-Control': 'no-store'
         });
+        clientResponse.on('error', reject);
+        upstream.on('end', resolve);
+        upstream.on('error', reject);
+        upstream.pipe(clientResponse);
         return;
       }
 
