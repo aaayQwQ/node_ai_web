@@ -141,6 +141,11 @@ function start(root) {
         update.apiKey = currentConfig.apiKey;
       }
 
+      // 密码输入框留空时保留原密码，避免保存其他设置时意外关闭访问保护。
+      if (!update.webPassword) {
+        update.webPassword = currentConfig.webPassword;
+      }
+
       delete update.apiKeySet;
       delete update.apiKeyHint;
 
