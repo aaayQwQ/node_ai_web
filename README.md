@@ -43,7 +43,7 @@ node main.js --check
 - `POST /v1/embeddings`：转发 Embeddings 请求。
 - `GET/POST /api/config`：读取/保存配置。
 - `GET/POST /api/history`：读取/保存历史。
-- `GET /api/plugins`：列出插件。
+- `GET /api/plugins`：列出插件。\n- `POST /api/plugins/:id/enable` 和 `/disable`：启用或停用插件。\n- `POST /api/plugins/:id/reload`：重新加载插件。
 
 当配置网页访问密码后，API 和网页都需要使用 `Authorization: Bearer <网页密码>`。聊天接口有每 IP 每分钟 60 次的简单限流。
 
@@ -54,7 +54,7 @@ node main.js --check
 ## 排错
 
 - 确认端口 3001 没被占用。
-- 确认 Base URL 不要重复添加 `/v1`，例如 DeepSeek 使用 `https://api.deepseek.com`。
+- Base URL 可填写 `https://api.example.com` 或 `https://api.example.com/v1`；程序会避免重复拼接 `/v1`。不要把 API Key 或网页密码放进 URL。
 - 检查 API Key、模型名和上游余额/限额。
 - 查看 `logs/` 下当天日志。
 - 查看 `http://127.0.0.1:3001/health` 检查服务是否运行。
