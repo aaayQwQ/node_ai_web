@@ -6,50 +6,64 @@ const proxy = require('../src/proxy');
 const cases = [
   {
     input: 'https://api.example.com',
-    expected: 'https://api.example.com/v1'
+    normalized: 'https://api.example.com',
+    chat: 'https://api.example.com/v1/chat/completions',
+    models: 'https://api.example.com/v1/models'
   },
   {
     input: 'https://api.example.com/v1',
-    expected: 'https://api.example.com/v1'
+    normalized: 'https://api.example.com/v1',
+    chat: 'https://api.example.com/v1/chat/completions',
+    models: 'https://api.example.com/v1/models'
   },
   {
     input: 'https://api.example.com/v1/',
-    expected: 'https://api.example.com/v1'
+    normalized: 'https://api.example.com/v1',
+    chat: 'https://api.example.com/v1/chat/completions',
+    models: 'https://api.example.com/v1/models'
   },
   {
     input: 'https://api.example.com/custom/v1',
-    expected: 'https://api.example.com/custom/v1'
+    normalized: 'https://api.example.com/custom/v1',
+    chat: 'https://api.example.com/custom/v1/chat/completions',
+    models: 'https://api.example.com/custom/v1/models'
   },
   {
     input: 'https://api.example.com/v1/v1',
-    expected: 'https://api.example.com/v1'
+    normalized: 'https://api.example.com/v1',
+    chat: 'https://api.example.com/v1/chat/completions',
+    models: 'https://api.example.com/v1/models'
   },
   {
     input: 'https://api.example.com/v1/chat/completions',
-    expected: 'https://api.example.com/v1'
+    normalized: 'https://api.example.com/v1',
+    chat: 'https://api.example.com/v1/chat/completions',
+    models: 'https://api.example.com/v1/models'
   },
   {
     input: 'https://api.example.com/v1/models',
-    expected: 'https://api.example.com/v1'
+    normalized: 'https://api.example.com/v1',
+    chat: 'https://api.example.com/v1/chat/completions',
+    models: 'https://api.example.com/v1/models'
   }
 ];
 
 for (const testCase of cases) {
   assert.strictEqual(
     proxy.normalizeBaseURL(testCase.input).href,
-    testCase.expected,
+    testCase.normalized,
     'Base URL normalization: ' + testCase.input
   );
 
   assert.strictEqual(
     proxy.endpointURL(testCase.input, '/v1/chat/completions').href,
-    testCase.expected + '/chat/completions',
+    testCase.chat,
     'Chat endpoint: ' + testCase.input
   );
 
   assert.strictEqual(
     proxy.endpointURL(testCase.input, '/v1/models').href,
-    testCase.expected + '/models',
+    testCase.models,
     'Models endpoint: ' + testCase.input
   );
 }
