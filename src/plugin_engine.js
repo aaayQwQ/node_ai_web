@@ -1,3 +1,175 @@
 'use strict';
-const fs=require('fs'),path=require('path'),vm=require('vm');
-module.exports=function(root,config,log){const loaded={};function load(id){const dir=path.join(root,'plugins',id),meta=JSON.parse(fs.readFileSync(path.join(dir,'plugin.json'),'utf8')),code=fs.readFileSync(path.join(dir,'index.js'),'utf8');const storeFile=path.join(root,'config','plugins_data',id+'.json');fs.mkdirSync(path.dirname(storeFile),{recursive:true});let store={};try{store=JSON.parse(fs.readFileSync(storeFile,'utf8'))}catch(_){}const api={storage:{get:k=>store[k],set:(k,v)=>{store[k]=v;fs.writeFileSync(storeFile,JSON.stringify(store,null,2))}},log:(...a)=>log('PLUGIN '+id,a.join(' '))};const sandbox={module:{exports:{}},exports:{},context:api,console:{log:(...a)=>api.log(...a)},setTimeout,clearTimeout};vm.runInNewContext(code,sandbox,{timeout:1000,filename:id+'/index.js'});loaded[id]={meta,api,impl:sandbox.module.exports};if(typeof loaded[id].impl.onPluginInit==='function')loaded[id].impl.onPluginInit(api);return loaded[id]}function init(){for(const id of config.read().enabledPlugins||[])try{load(id)}catch(e){log('ERROR','plugin '+id+': '+e.message)}}function hook(name,arg){for(const id of Object.keys(loaded)){const fn=loaded[id].impl[name];if(typeof fn==='function')try{const v=fn(arg,loaded[id].api);if(v!==undefined&&name==='beforeRequest')arg=v}catch(e){log('ERROR','plugin hook '+id+': '+e.message)}}return arg}function list(){return fs.readdirSync(path.join(root,'plugins')).filter(id=>{try{return fs.statSync(path.join(root,'plugins',id)).isDirectory()}catch(_){return false}}).map(id=>{try{return Object.assign({},JSON.parse(fs.readFileSync(path.join(root,'plugins',id,'plugin.json'),'utf8')),{enabled:!!loaded[id]})}catch(_){return {id,enabled:!!loaded[id]}}})}function reload(id){delete loaded[id];if((config.read().enabledPlugins||[]).includes(id))load(id);return list()}return {init,hook,list,reload};};
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+module.exports = function createPluginEngine(root, config, log) {
+  const loaded = new Map();
+  const pluginRoot = path.join(root, 'plugins');
+  const dataRoot = path.join(root, 'config', 'plugins_data');
+
+  function pluginDirectory(id) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+      throw new Error('插件 ID 不合法。');
+    }
+
+    const directory = path.resolve(pluginRoot, id);
+    if (!directory.startsWith(pluginRoot + path.sep)) {
+      throw new Error('插件目录无效。');
+    }
+
+    return directory;
+  }
+
+  function load(id) {
+    const directory = pluginDirectory(id);
+    const metadata = JSON.parse(
+      fs.readFileSync(path.join(directory, 'plugin.json'), 'utf8')
+    );
+    const source = fs.readFileSync(path.join(directory, 'index.js'), 'utf8');
+    const dataFile = path.join(dataRoot, id + '.json');
+
+    fs.mkdirSync(dataRoot, { recursive: true });
+
+    let store = {};
+    try {
+      store = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    } catch (_) {}
+
+    const api = {
+      storage: {
+        get(key) {
+          return store[key];
+        },
+        set(key, value) {
+          store[key] = value;
+          fs.writeFileSync(dataFile, JSON.stringify(store, null, 2) + '\n');
+        }
+      },
+      log(...values) {
+        log('PLUGIN ' + id, values.join(' '));
+      }
+    };
+
+    const sandbox = {
+      module: { exports: {} },
+      exports: {},
+      context: api,
+      console: { log: (...values) => api.log(...values) },
+      setTimeout,
+      clearTimeout
+    };
+
+    vm.runInNewContext(source, sandbox, {
+      timeout: 1000,
+      filename: id + '/index.js'
+    });
+
+    const plugin = {
+      id,
+      metadata,
+      api,
+      implementation: sandbox.module.exports
+    };
+
+    loaded.set(id, plugin);
+
+    if (typeof plugin.implementation.onPluginInit === 'function') {
+      plugin.implementation.onPluginInit(api);
+    }
+
+    return plugin;
+  }
+
+  function init() {
+    const enabled = config.read().enabledPlugins || [];
+
+    for (const id of enabled) {
+      try {
+        load(id);
+      } catch (error) {
+        log('ERROR', '插件 ' + id + ' 加载失败：' + error.message);
+      }
+    }
+  }
+
+  function hook(name, context) {
+    let current = context;
+
+    for (const plugin of loaded.values()) {
+      const handler = plugin.implementation[name];
+      if (typeof handler !== 'function') continue;
+
+      try {
+        const result = handler(current, plugin.api);
+        if (result !== undefined && name === 'beforeRequest') {
+          current = result;
+        }
+      } catch (error) {
+        log('ERROR', '插件钩子 ' + plugin.id + '/' + name + '：' + error.message);
+      }
+    }
+
+    return current;
+  }
+
+  function list() {
+    let directories = [];
+
+    try {
+      directories = fs.readdirSync(pluginRoot, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name);
+    } catch (_) {}
+
+    return directories.map(id => {
+      try {
+        const metadata = JSON.parse(
+          fs.readFileSync(path.join(pluginDirectory(id), 'plugin.json'), 'utf8')
+        );
+
+        return Object.assign({}, metadata, {
+          enabled: loaded.has(id)
+        });
+      } catch (error) {
+        return { id, enabled: loaded.has(id), error: error.message };
+      }
+    });
+  }
+
+  function reload(id) {
+    loaded.delete(id);
+
+    if ((config.read().enabledPlugins || []).includes(id)) {
+      load(id);
+    }
+
+    return list();
+  }
+
+  function setEnabled(id, enabled) {
+    pluginDirectory(id);
+
+    const current = config.read();
+    const list = new Set(current.enabledPlugins || []);
+
+    if (enabled) {
+      list.add(id);
+    } else {
+      list.delete(id);
+      loaded.delete(id);
+    }
+
+    current.enabledPlugins = Array.from(list);
+    config.write(current);
+
+    if (enabled) {
+      load(id);
+    }
+
+    return list();
+  }
+
+  return { init, hook, list, reload, setEnabled };
+};
