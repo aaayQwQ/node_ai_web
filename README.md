@@ -17,7 +17,7 @@ node main.js
 
 浏览器打开 http://127.0.0.1:3001 。 
 
-检查 Node.js 版本、配置和上游连通性：
+运行无第三方依赖的 Base URL 回归测试：\n\n```sh\nnode tests/base-url.test.js\n```\n\n检查 Node.js 版本、配置和上游连通性：
 
 ```sh
 node main.js --check
