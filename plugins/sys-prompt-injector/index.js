@@ -1,13 +1,29 @@
 'use strict';
+
 module.exports = {
-  onPluginInit: function (context) { context.log('插件初始化完成'); },
-  beforeRequest: function (ctx, context) {
-    if (ctx && ctx.request && Array.isArray(ctx.request.messages)) {
-      context.log('处理请求，消息数量：' + ctx.request.messages.length);
-    }
-    return ctx;
+  onPluginInit(context) {
+    context.log('插件初始化完成');
   },
-  afterResponse: function (ctx, context) { context.log('上游请求已完成'); },
-  onRequestError: function (ctx, context) { context.log('请求错误：' + (ctx.error || 'unknown')); },
-  onServerStart: function (ctx, context) { context.log('服务已启动'); }
+
+  beforeRequest(context, pluginAPI) {
+    const request = context && context.request;
+    if (!request || !Array.isArray(request.messages)) {
+      return context;
+    }
+
+    pluginAPI.log('收到请求，消息数量：' + request.messages.length);
+    return context;
+  },
+
+  afterResponse(context, pluginAPI) {
+    pluginAPI.log('上游请求已完成');
+  },
+
+  onRequestError(context, pluginAPI) {
+    pluginAPI.log('请求失败：' + (context.error || 'unknown'));
+  },
+
+  onServerStart(context, pluginAPI) {
+    pluginAPI.log('服务已启动');
+  }
 };
