@@ -213,7 +213,7 @@ function renderMessages() {
       + '<h1>有什么可以帮忙？</h1>'
       + '<p>输入问题，开始一段新的对话。</p>';
     container.appendChild(welcome);
-    $('currentModel').textContent = state.config.model || '默认模型';
+    $('modelSelect').title = state.config.model || '默认模型';
     return;
   }
 
@@ -241,6 +241,8 @@ function renderMessages() {
     container.appendChild(row);
   }
 
+  container.scrollTop = container.scrollHeight;
+
   container.querySelectorAll('.copy-code').forEach(button => {
     button.addEventListener('click', async () => {
       const code = button.parentElement.querySelector('code').innerText;
@@ -257,7 +259,7 @@ function renderMessages() {
   });
 
   container.scrollTop = container.scrollHeight;
-  $('currentModel').textContent = $('modelSelect').value
+  $('modelSelect').title = $('modelSelect').value
     || state.config.model
     || '默认模型';
   updateThinkingButton();
@@ -305,7 +307,7 @@ async function loadModels() {
 
     select.value = selected;
     if (select.value !== selected) select.value = '';
-    $('currentModel').textContent = select.value || state.config.model || '默认模型';
+    select.title = select.value || state.config.model || '默认模型';
   } catch (error) {
     console.warn('读取模型列表失败：', error.message);
   }
@@ -636,13 +638,14 @@ $('mobileMenuTop').addEventListener('click', () => {
   document.body.classList.toggle('sidebar-open');
 });
 $('modelSelect').addEventListener('change', () => {
-  $('currentModel').textContent = $('modelSelect').value
+  $('modelSelect').title = $('modelSelect').value
     || state.config.model
     || '默认模型';
 });
-$('modelMenu').addEventListener('click', () => {
-  $('modelSelect').focus();
-  $('modelSelect').click();
+$('modelSelect').addEventListener('change', () => {
+  $('modelSelect').title = $('modelSelect').value
+    || state.config.model
+    || '默认模型';
 });
 $('thinkingBtn').addEventListener('click', () => {
   state.thinking = !state.thinking;
