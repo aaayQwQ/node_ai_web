@@ -1,0 +1,7 @@
+{
+  "id": "sys-prompt-injector",
+  "name": "System Prompt Injector",
+  "version": "1.0.0",
+  "author": "Node AI Web",
+  "description": "示例插件：在请求进入上游之前记录请求信息。"
+}
