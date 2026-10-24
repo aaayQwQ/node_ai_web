@@ -168,8 +168,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .model-menu:hover { background: var(--surface-hover); }
 #modelSelect {
+  display: block;
+  width: auto;
+  max-width: min(52vw, 340px);
+  min-width: 100px;
   overflow: hidden;
+  padding-right: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
   text-overflow: ellipsis;
+  appearance: auto;
+}
+#modelSelect option {
+  background: var(--surface);
+  color: var(--text);
 }
 .topbar-right { color: var(--muted); font-size: 12px; }
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: #d4a72c; }
