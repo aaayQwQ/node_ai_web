@@ -15,7 +15,13 @@
 node main.js
 ```
 
-浏览器打开 http://127.0.0.1:3001 。\n\n检查 Node.js 版本、配置和上游连通性：\n\n```sh\nnode main.js --check\n```
+浏览器打开 http://127.0.0.1:3001 。 
+
+检查 Node.js 版本、配置和上游连通性：
+
+```sh
+node main.js --check
+```
 
 首次启动会生成 `config/config.json` 和 `config/history.json`。在网页点击“设置”，填写 Base URL、API Key 和模型名称，然后保存。默认 Base URL 是 `https://api.deepseek.com`，默认模型是 `deepseek-chat`。
 
