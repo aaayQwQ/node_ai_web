@@ -642,11 +642,6 @@ $('modelSelect').addEventListener('change', () => {
     || state.config.model
     || '默认模型';
 });
-$('modelSelect').addEventListener('change', () => {
-  $('modelSelect').title = $('modelSelect').value
-    || state.config.model
-    || '默认模型';
-});
 $('thinkingBtn').addEventListener('click', () => {
   state.thinking = !state.thinking;
   const chat = currentChat();
