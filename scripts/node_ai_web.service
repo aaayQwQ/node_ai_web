@@ -1,0 +1,13 @@
+[Unit]
+Description=Node AI Web
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/node_ai_web
+ExecStart=/usr/bin/node %h/node_ai_web/main.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
