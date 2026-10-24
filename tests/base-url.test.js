@@ -6,7 +6,7 @@ const proxy = require('../src/proxy');
 const cases = [
   {
     input: 'https://api.example.com',
-    normalized: 'https://api.example.com',
+    normalized: 'https://api.example.com/',
     chat: 'https://api.example.com/v1/chat/completions',
     models: 'https://api.example.com/v1/models'
   },
