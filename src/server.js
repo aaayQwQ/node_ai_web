@@ -112,7 +112,9 @@ function start(root) {
       apiKeySet: Boolean(currentConfig.apiKey),
       apiKeyHint: currentConfig.apiKey
         ? '••••••••' + currentConfig.apiKey.slice(-4)
-        : ''
+        : '',
+      webPassword: '',
+      webPasswordSet: Boolean(currentConfig.webPassword)
     });
   }
 
