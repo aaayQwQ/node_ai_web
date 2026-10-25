@@ -13,6 +13,7 @@ const TIMEOUT_MS = 15000;
 module.exports = function createMCPManager(root, log) {
   const file = path.join(root, 'config', 'mcp-servers.json');
   let nextId = 1;
+  const httpSessions = new Map();
 
   function readAll() {
     try {
@@ -136,12 +137,12 @@ module.exports = function createMCPManager(root, log) {
             const data = text.split(/\r?\n/).filter(line => line.startsWith('data:'))
               .map(line => line.slice(5).trim()).filter(Boolean);
             for (const item of data.reverse()) {
-              try { resolve(JSON.parse(item)); return; } catch (_) {}
+              try { const parsed = JSON.parse(item); parsed._headers = res.headers; resolve(parsed); return; } catch (_) {}
             }
             reject(new Error('MCP SSE 响应中没有有效 JSON data。'));
             return;
           }
-          try { resolve(JSON.parse(text)); }
+          try { const parsed = JSON.parse(text); if (parsed && typeof parsed === 'object') parsed._headers = res.headers; resolve(parsed); }
           catch (_) { reject(new Error('MCP 服务返回了非 JSON 响应。')); }
         });
       });
@@ -318,12 +319,45 @@ module.exports = function createMCPManager(root, log) {
   async function rpc(server, method, params) {
     if (server.type === 'stdio') return stdioCall(server, method, params);
     if (server.type === 'sse') return sseRPC(server, method, params);
+
+    let session = httpSessions.get(server.id);
+    if (!session) {
+      const initId = ++nextId;
+      const initialized = await requestHTTP(server.url, server.headers, JSON.stringify({
+        jsonrpc: '2.0',
+        id: initId,
+        method: 'initialize',
+        params: {
+          protocolVersion: PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: { name: 'Node AI Web', version: '1.0.0' }
+        }
+      }), server.timeout);
+      if (initialized && initialized.error) {
+        throw new Error(initialized.error.message || 'MCP 初始化失败。');
+      }
+      const responseHeaders = initialized && initialized._headers ? initialized._headers : {};
+      session = {
+        id: responseHeaders['mcp-session-id'] || '',
+        protocolVersion: initialized && initialized.result && initialized.result.protocolVersion
+          ? initialized.result.protocolVersion : PROTOCOL_VERSION
+      };
+      httpSessions.set(server.id, session);
+      const notifyHeaders = Object.assign({}, server.headers || {});
+      if (session.id) notifyHeaders['Mcp-Session-Id'] = session.id;
+      notifyHeaders['MCP-Protocol-Version'] = session.protocolVersion;
+      await requestHTTP(server.url, notifyHeaders, JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'notifications/initialized'
+      }), server.timeout).catch(() => ({}));
+    }
+
     const headers = Object.assign({}, server.headers || {});
-    const body = JSON.stringify({
+    if (session.id) headers['Mcp-Session-Id'] = session.id;
+    headers['MCP-Protocol-Version'] = session.protocolVersion;
+    const result = await requestHTTP(server.url, headers, JSON.stringify({
       jsonrpc: '2.0', id: ++nextId, method, params: params || {}
-    });
-    // Streamable HTTP MCP accepts JSON-RPC POST at the configured endpoint.
-    const result = await requestHTTP(server.url, headers, body, server.timeout);
+    }), server.timeout);
     if (result && result.error) throw new Error(result.error.message || 'MCP JSON-RPC 调用失败。');
     return result && result.result !== undefined ? result.result : result;
   }
