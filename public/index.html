@@ -114,18 +114,53 @@
         <textarea id="systemPrompt" rows="3" placeholder="定义助手的行为和风格"></textarea>
       </label>
       <div class="form-grid">
-        <label>TEMPERATURE
+        <label>Temperature
           <input id="temperature" type="number" min="0" max="2" step="0.1">
+        </label>
+        <label>Top P
+          <input id="topP" type="number" min="0" max="1" step="0.05">
+        </label>
+        <label>Max Tokens
+          <input id="maxTokens" type="number" min="1" max="200000" step="256">
+        </label>
+        <label>上下文轮数
+          <input id="contextWindow" type="number" min="1" max="100" step="1">
         </label>
         <label>网页访问密码（可选）
           <input id="webPassword" type="password" autocomplete="new-password">
         </label>
       </div>
+      <label>自定义请求头（JSON）
+        <textarea id="customHeaders" rows="3" spellcheck="false" placeholder='{"HTTP-Referer":"https://example.com","X-Title":"Node AI Web"}'></textarea>
+        <small>密钥类请求头会在读取配置时隐藏；修改时请重新填写需要变更的值。</small>
+      </label>
       <div class="modal-actions">
         <button type="button" id="testConnection">测试连接 ↗</button>
         <button type="button" class="primary-button" id="saveSettings">保存设置 <span>→</span></button>
       </div>
       <p class="form-result" id="settingsResult" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="mcpManager">
+    <form method="dialog" id="mcpManagerForm">
+      <div class="modal-header"><div><h2>MCP 服务管理</h2><p>连接自定义 MCP 工具服务器。</p></div><button class="icon-button close-modal" aria-label="关闭">×</button></div>
+      <div id="mcpServerList" class="plugin-list"></div>
+      <div class="mcp-editor">
+        <h3 id="mcpEditorTitle">添加 MCP 服务</h3>
+        <input id="mcpId" type="hidden">
+        <label>服务名称<input id="mcpName" placeholder="例如 本地文件工具" required></label>
+        <label>服务类型<select id="mcpType"><option value="http">HTTP / Streamable HTTP</option><option value="sse">SSE（基础兼容）</option><option value="stdio">Stdio 本地进程</option></select></label>
+        <label id="mcpUrlRow">Endpoint URL<input id="mcpUrl" placeholder="http://127.0.0.1:3000/mcp"></label>
+        <label id="mcpCommandRow" hidden>Command<input id="mcpCommand" placeholder="/absolute/path/to/server"></label>
+        <label id="mcpArgsRow" hidden>启动参数（JSON 数组）<textarea id="mcpArgs" rows="2" placeholder='["--port","3000"]'></textarea></label>
+        <label id="mcpEnvRow" hidden>环境变量（JSON 对象）<textarea id="mcpEnv" rows="2" placeholder='{"TOKEN":"..."}'></textarea></label>
+        <label>Headers（JSON）<textarea id="mcpHeaders" rows="3" placeholder='{"Authorization":"Bearer ..."}'></textarea></label>
+        <label>工具调用策略<select id="mcpApproval"><option value="confirm">每次调用前确认</option><option value="auto">自动调用</option></select></label>
+        <label class="inline-check"><input id="mcpEnabled" type="checkbox" checked> 启用此服务</label>
+        <div class="modal-actions"><button type="button" id="mcpReset">清空表单</button><button type="button" id="mcpSave" class="primary-button">保存服务</button></div>
+        <p class="form-result" id="mcpResult" role="status"></p>
+      </div>
     </form>
   </dialog>
 
