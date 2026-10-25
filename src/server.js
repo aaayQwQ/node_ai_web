@@ -112,7 +112,7 @@ function start(root) {
     return Object.assign({}, currentConfig, {
       apiKey: '',
       customHeaders: Object.fromEntries(Object.entries(currentConfig.customHeaders || {}).map(([key, value]) => [
-        key, /authorization|token|secret|api[-_]?key/i.test(key) ? '••••••••' : value
+        key, /authorization|auth|token|secret|api[-_]?key/i.test(key) ? '••••••••' : value
       ])),
       apiKeySet: Boolean(currentConfig.apiKey),
       apiKeyHint: currentConfig.apiKey
