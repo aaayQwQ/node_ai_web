@@ -237,16 +237,20 @@ function createChat() {
   $('prompt').focus();
 }
 
+let historySaveQueue = Promise.resolve();
+let historySaveVersion = 0;
 function saveHistory() {
-  try {
-    localStorage.setItem('node-ai-web-history', JSON.stringify(state.chats));
-  } catch (_) {}
-
-  api('/api/history', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(state.chats)
-  }).catch(error => console.warn('保存历史失败：', error.message));
+  const snapshot = JSON.stringify(state.chats);
+  const version = ++historySaveVersion;
+  try { localStorage.setItem('node-ai-web-history', snapshot); }
+  catch (_) { showToast('浏览器存储空间不足，历史记录可能无法完整保存。', 'warning'); }
+  // Serialize writes: an older, slower POST must not overwrite a newer snapshot.
+  historySaveQueue = historySaveQueue.catch(() => {}).then(() => api('/api/history', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: snapshot
+  })).catch(error => {
+    console.warn('保存历史失败：', error.message);
+    if (version === historySaveVersion) showToast('历史记录未能同步到本地服务；浏览器副本仍已保留。', 'warning');
+  });
 }
 
 function renderHistory() {
@@ -385,9 +389,19 @@ function renderMessages() {
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
+      if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
+        const notice = document.createElement('div');
+        notice.className = 'message-tool-notice';
+        notice.textContent = '工具调用 · ' + message.tool_calls.map(call =>
+          call && call.function && call.function.name ? call.function.name : 'MCP 工具'
+        ).join('、');
+        bubble.appendChild(notice);
+      }
       bubble.innerHTML = (message.reasoning
         ? '<details class="thinking-panel"><summary><span class="thinking-pulse"></span>已深度思考 <span class="thinking-panel-note">展开查看</span></summary><div class="thinking-content">' + renderMarkdown(message.reasoning) + '</div></details>'
-        : '') + renderMarkdown(message.content || (state.controller ? '正在思考…' : ''));
+        : '') + renderMarkdown(message.content || (state.controller ? '正在思考…' : ''))
+        + (message.error ? '<div class="message-inline-error">' + escapeHTML(message.error) + '</div>' : '')
+        + (message.stopped ? '<div class="message-stopped">已停止生成</div>' : '');
 
       row.append(avatar, bubble);
     }
@@ -687,9 +701,12 @@ async function sendMessage(event) {
     }
   } catch (error) {
     if (error.name === 'AbortError') {
-      if (!assistant.content) assistant.content = '已停止生成。';
+      if (!assistant.content && !assistant.reasoning) assistant.content = '已停止生成。';
+      else assistant.stopped = true;
     } else {
-      assistant.content = '请求失败：' + error.message;
+      const detail = '请求失败：' + error.message;
+      if (assistant.content || assistant.reasoning) assistant.error = detail;
+      else assistant.content = detail;
       showToast(error.message, 'warning');
     }
   } finally {

@@ -1078,3 +1078,9 @@ html body .thinking-button[aria-pressed="true"] .thinking-symbol {
     transition: none !important;
   }
 }
+
+
+/* Clear message-level status without overwhelming the conversation. */
+.message-tool-notice{display:inline-flex;margin:0 0 12px;padding:7px 10px;border:1px solid color-mix(in srgb,#d6a84f 36%,var(--line));border-radius:9px;background:color-mix(in srgb,#d6a84f 9%,var(--paper-2));color:var(--ink-soft);font-size:12px}
+.message-inline-error{margin-top:12px;padding:10px 12px;border-left:3px solid #d97757;border-radius:0 8px 8px 0;background:color-mix(in srgb,#d97757 9%,var(--paper-2));color:var(--ink-soft);font-size:13px;overflow-wrap:anywhere}
+.message-stopped{margin-top:10px;color:var(--ink-muted);font-size:12px}
