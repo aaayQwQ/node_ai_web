@@ -874,7 +874,9 @@ function resetMCPForm() {
 
 function updateMCPTypeFields() {
   const stdio = $('mcpType').value === 'stdio';
+  const websocket = $('mcpType').value === 'websocket';
   $('mcpUrlRow').hidden = stdio;
+  $('mcpUrl').placeholder = websocket ? 'ws://127.0.0.1:3000/mcp 或 wss://example.com/mcp' : $('mcpType').value === 'sse' ? 'https://example.com/sse' : 'http://127.0.0.1:3000/mcp';
   $('mcpCommandRow').hidden = !stdio;
   $('mcpArgsRow').hidden = !stdio;
   $('mcpEnvRow').hidden = !stdio;
