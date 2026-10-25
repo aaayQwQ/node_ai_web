@@ -329,7 +329,14 @@ function start(root) {
       const savedProvider = body.providerId && (currentConfig.providers || []).find(item => item.id === body.providerId);
       const baseURL = body.baseURL || (savedProvider && savedProvider.baseURL) || currentConfig.baseURL;
       const apiKey = body.apiKey || (savedProvider && savedProvider.apiKey) || currentConfig.apiKey;
-      const customHeaders = body.customHeaders || (savedProvider && savedProvider.customHeaders) || currentConfig.customHeaders;
+      const customHeaders = Object.assign({}, (savedProvider && savedProvider.customHeaders) || currentConfig.customHeaders || {}, body.customHeaders || {});
+      if (savedProvider) {
+        for (const [key, value] of Object.entries(customHeaders)) {
+          if (value === '••••••••' && Object.prototype.hasOwnProperty.call(savedProvider.customHeaders || {}, key)) {
+            customHeaders[key] = savedProvider.customHeaders[key];
+          }
+        }
+      }
 
       try {
         const result = await proxy.check(baseURL, apiKey, customHeaders);
