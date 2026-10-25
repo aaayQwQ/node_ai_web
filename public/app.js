@@ -267,14 +267,13 @@ function renderMessages() {
     const welcome = document.createElement('div');
     const configured = Boolean(state.config.baseURL && state.config.apiKeySet);
     welcome.className = 'welcome welcome-modern' + (configured ? '' : ' needs-config');
-    welcome.innerHTML = '<div class="welcome-brand"><span class="welcome-logo">N<span>✳</span></span><span>NODE AI <small>YOUR MODEL. YOUR RULES.</small></span></div>'
-      + '<div class="welcome-kicker">' + (configured ? 'READY WHEN YOU ARE' : 'FIRST-TIME SETUP / 01') + '</div>'
+    welcome.innerHTML = '<div class="welcome-brand">NODE AI WEB</div>'
       + '<h1>' + (configured ? '有什么新想法？' : '先连接你的模型，<br>再开始对话。') + '</h1>'
       + '<p class="welcome-description">' + (configured ? '写代码、整理思路、探索问题。让对话从这里开始。' : '这是你的私人 AI 工作区。配置兼容 OpenAI 的 API 地址与密钥，即可开始使用。密钥由本地服务保存。') + '</p>'
       + (configured
         ? '<div class="welcome-suggestions"><button type="button" data-prompt="帮我解释一段代码">解释一段代码 <span>↗</span></button><button type="button" data-prompt="帮我整理一个想法">整理一个想法 <span>↗</span></button><button type="button" data-prompt="用清晰的步骤解决一个问题">拆解一个问题 <span>↗</span></button></div>'
         : '<div class="setup-card"><div class="setup-card-icon">⌘</div><div class="setup-card-copy"><strong>连接你的 API</strong><span>Base URL · API Key · 默认模型</span></div><button type="button" class="setup-cta" id="welcomeSetupBtn">去配置 API Key <span>→</span></button></div><div class="setup-foot"><span>支持 OpenAI 兼容接口</span><span>DeepSeek · OpenAI · OpenRouter · 自定义</span></div>')
-      + '<div class="welcome-bottomline"><span>NODE AI WEB</span><span>LOCAL-FIRST / OPENAI-COMPATIBLE</span></div>';
+      ;
     container.appendChild(welcome);
     welcome.querySelectorAll('[data-prompt]').forEach(button => button.addEventListener('click', () => {
       $('prompt').value = button.dataset.prompt;
