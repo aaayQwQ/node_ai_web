@@ -8,7 +8,7 @@
   <title>Node AI Web — 工作区</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body class="light">
+<body class="dark">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-top">
       <button class="icon-button mobile-menu" id="mobileMenu" aria-label="打开侧边栏">☰</button>
@@ -96,6 +96,18 @@
         <div><p class="eyebrow">配置 / 01</p><h2>连接设置<span class="accent-dot">.</span></h2><p>连接兼容 OpenAI Chat Completions 的 API。</p></div>
         <button class="icon-button close-modal" aria-label="关闭">×</button>
       </div>
+      <label>服务商预设
+        <select id="providerPreset">
+          <option value="custom">自定义 / OpenAI 兼容接口</option>
+          <option value="openai">OpenAI</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="anthropic">Anthropic（需兼容代理）</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="siliconflow">硅基流动</option>
+          <option value="ollama">Ollama（本地）</option>
+        </select>
+        <small>预设只填写 Base URL，不会替你创建或保存 API Key。</small>
+      </label>
       <label>API BASE URL
         <input id="baseURL" placeholder="https://api.example.com/v1" spellcheck="false">
         <small>可以填写域名或以 /v1 结尾的地址；程序会处理重复的 /v1。</small>
@@ -142,6 +154,7 @@
     </form>
   </dialog>
 
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/app.js"></script>
 </body>
 </html>
