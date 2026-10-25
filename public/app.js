@@ -710,6 +710,131 @@ async function openPlugins() {
   }
 }
 
+function resetMCPForm() {
+  $('mcpId').value = '';
+  $('mcpName').value = '';
+  $('mcpType').value = 'http';
+  $('mcpUrl').value = '';
+  $('mcpCommand').value = '';
+  $('mcpArgs').value = '[]';
+  $('mcpEnv').value = '{}';
+  $('mcpHeaders').value = '{}';
+  $('mcpApproval').value = 'confirm';
+  $('mcpEnabled').checked = true;
+  $('mcpEditorTitle').textContent = '添加 MCP 服务';
+  $('mcpResult').textContent = '';
+  updateMCPTypeFields();
+}
+
+function updateMCPTypeFields() {
+  const stdio = $('mcpType').value === 'stdio';
+  $('mcpUrlRow').hidden = stdio;
+  $('mcpCommandRow').hidden = !stdio;
+  $('mcpArgsRow').hidden = !stdio;
+  $('mcpEnvRow').hidden = !stdio;
+}
+
+function editMCPServer(server) {
+  $('mcpId').value = server.id || '';
+  $('mcpName').value = server.name || '';
+  $('mcpType').value = server.type || 'http';
+  $('mcpUrl').value = server.url || '';
+  $('mcpCommand').value = server.command || '';
+  $('mcpArgs').value = JSON.stringify(server.args || [], null, 2);
+  $('mcpEnv').value = JSON.stringify(server.env || {}, null, 2);
+  $('mcpHeaders').value = JSON.stringify(server.headers || {}, null, 2);
+  $('mcpApproval').value = server.approval || 'confirm';
+  $('mcpEnabled').checked = Boolean(server.enabled);
+  $('mcpEditorTitle').textContent = '编辑 MCP 服务';
+  $('mcpResult').textContent = '';
+  updateMCPTypeFields();
+}
+
+async function refreshMCPServers() {
+  const list = $('mcpServerList');
+  list.replaceChildren();
+  try {
+    const servers = await api('/api/mcp/servers');
+    if (!servers.length) {
+      const empty = document.createElement('p');
+      empty.textContent = '尚未添加 MCP 服务。';
+      list.appendChild(empty);
+    }
+    for (const server of servers) {
+      const card = document.createElement('section');
+      card.className = 'plugin-card';
+      const title = document.createElement('strong');
+      title.textContent = server.name;
+      const status = document.createElement('p');
+      status.textContent = server.type.toUpperCase() + ' · ' + (server.enabled ? '已启用' : '已停用')
+        + ' · ' + (server.approval === 'auto' ? '自动调用' : '调用前确认');
+      const edit = document.createElement('button');
+      edit.type = 'button'; edit.textContent = '编辑';
+      edit.addEventListener('click', () => editMCPServer(server));
+      const discover = document.createElement('button');
+      discover.type = 'button'; discover.textContent = '发现工具';
+      discover.addEventListener('click', async () => {
+        try {
+          const result = await api('/api/mcp/servers/' + encodeURIComponent(server.id) + '/discover', { method: 'POST' });
+          showToast('发现 ' + result.tools.length + ' 个工具', 'success');
+        } catch (error) { showToast(error.message, 'warning'); }
+      });
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.textContent = '删除';
+      remove.addEventListener('click', async () => {
+        if (!window.confirm('确定删除 MCP 服务“' + server.name + '”？')) return;
+        try {
+          await api('/api/mcp/servers/' + encodeURIComponent(server.id), { method: 'DELETE' });
+          await refreshMCPServers();
+          showToast('MCP 服务已删除', 'success');
+        } catch (error) { showToast(error.message, 'warning'); }
+      });
+      card.append(title, status, edit, discover, remove);
+      list.appendChild(card);
+    }
+  } catch (error) {
+    const message = document.createElement('p');
+    message.textContent = '加载 MCP 服务失败：' + error.message;
+    list.appendChild(message);
+  }
+}
+
+async function openMCPManager() {
+  resetMCPForm();
+  await refreshMCPServers();
+  $('mcpManager').showModal();
+}
+
+async function saveMCPServer() {
+  const output = $('mcpResult');
+  try {
+    const body = {
+      id: $('mcpId').value || undefined,
+      name: $('mcpName').value.trim(),
+      type: $('mcpType').value,
+      url: $('mcpUrl').value.trim(),
+      command: $('mcpCommand').value.trim(),
+      args: parseJSONArray($('mcpArgs').value, '启动参数'),
+      env: parseJSONField($('mcpEnv').value, '环境变量'),
+      headers: parseJSONField($('mcpHeaders').value, 'Headers'),
+      approval: $('mcpApproval').value,
+      enabled: $('mcpEnabled').checked
+    };
+    const result = await api('/api/mcp/servers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    output.textContent = '已保存：' + result.server.name;
+    await refreshMCPServers();
+    resetMCPForm();
+    showToast('MCP 服务已保存', 'success');
+  } catch (error) {
+    output.textContent = error.message;
+    showToast(error.message, 'warning');
+  }
+}
+
 function closeSidebarOnMobile() {
   if (window.matchMedia('(max-width: 760px)').matches) {
     document.body.classList.remove('sidebar-open');
@@ -737,7 +862,10 @@ $('prompt').addEventListener('input', event => {
 
 $('settingsBtn').addEventListener('click', openSettings);
 $('profileBtn').addEventListener('click', openSettings);
-$('pluginsBtn').addEventListener('click', openPlugins);
+$('pluginsBtn').addEventListener('click', openMCPManager);
+$('mcpType').addEventListener('change', updateMCPTypeFields);
+$('mcpReset').addEventListener('click', resetMCPForm);
+$('mcpSave').addEventListener('click', saveMCPServer);
 $('statusBtn').addEventListener('click', async () => {
   try {
     $('statusInfo').textContent = JSON.stringify(await api('/health'), null, 2);
