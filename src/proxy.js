@@ -138,11 +138,11 @@ async function json(urlValue, headers, body, timeout) {
   }
 }
 
-async function check(baseURL, apiKey) {
+async function check(baseURL, apiKey, customHeaders) {
   const target = endpointURL(baseURL, '/v1/models');
   const result = await request(target, {
     method: 'GET',
-    headers: authHeaders(apiKey, { Accept: 'application/json' })
+    headers: authHeaders(apiKey, Object.assign({}, customHeaders || {}, { Accept: 'application/json' }))
   }, null, 15000);
 
   return {
