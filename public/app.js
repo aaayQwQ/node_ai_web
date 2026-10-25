@@ -83,6 +83,30 @@ function renderInlineMarkdown(value) {
   return text;
 }
 
+function highlightCode(source, language) {
+  const lang = String(language || '').toLowerCase();
+  const code = String(source || '');
+  const supported = /^(js|javascript|ts|typescript|json|html|xml|css|bash|sh|python|py|go|rust|java|c|cpp|sql)$/.test(lang);
+  if (!supported) return escapeHTML(code);
+
+  const tokenPattern = /(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:const|let|var|function|return|if|else|for|while|class|new|throw|try|catch|async|await|import|from|export|default|true|false|null|undefined|None|def|print|in|is|and|or|not|package|func|type|struct|fn|pub|use|SELECT|FROM|WHERE|JOIN|INSERT|UPDATE|DELETE|CREATE|TABLE)\b|\b\d+(?:\.\d+)?\b)/g;
+  let result = '';
+  let last = 0;
+  for (const match of code.matchAll(tokenPattern)) {
+    result += escapeHTML(code.slice(last, match.index));
+    const token = match[0];
+    let kind = 'number';
+    if (/^(\/\/|#|\/\*)/.test(token)) kind = 'comment';
+    else if (/^["'`]/.test(token)) kind = 'string';
+    else if (/^\d/.test(token)) kind = 'number';
+    else kind = 'keyword';
+    result += '<span class="syntax-' + kind + '">' + escapeHTML(token) + '</span>';
+    last = match.index + token.length;
+  }
+  result += escapeHTML(code.slice(last));
+  return result;
+}
+
 function renderMarkdown(value) {
   const source = String(value || '').replace(/\r\n?/g, '\n');
   const codeBlocks = [];
@@ -91,7 +115,7 @@ function renderMarkdown(value) {
     const index = codeBlocks.length;
     codeBlocks.push({
       language: escapeHTML(language.trim()),
-      code: escapeHTML(code.replace(/\n$/, ''))
+      code: code.replace(/\n$/, '')
     });
     return '\n@@CODE_BLOCK_' + index + '@@\n';
   });
@@ -109,7 +133,7 @@ function renderMarkdown(value) {
 
       return '<pre>' + label
         + '<button type="button" class="copy-code">复制</button>'
-        + '<code>' + code.code + '</code></pre>';
+        + '<code>' + highlightCode(code.code, code.language.replace(/&amp;/g, '&')) + '</code></pre>';
     }
 
     if (/^#{1,3}\s/.test(trimmed)) {
@@ -129,6 +153,22 @@ function renderMarkdown(value) {
       return '<ol>' + lines.map(line =>
         '<li>' + renderInlineMarkdown(line.replace(/^\s*\d+\.\s+/, '')) + '</li>'
       ).join('') + '</ol>';
+    }
+
+    if (lines.length >= 2 && lines.every(line => /^\s*\|.*\|\s*$/.test(line))) {
+      const cells = lines.map(line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim()));
+      const hasSeparator = cells.length > 1 && cells[1].every(cell => /^:?-{3,}:?$/.test(cell));
+      const headerCells = cells[0];
+      const bodyRows = cells.slice(hasSeparator ? 2 : 1);
+      return '<div class="markdown-table-wrap"><table class="markdown-table"><thead><tr>'
+        + headerCells.map(cell => '<th>' + renderInlineMarkdown(cell) + '</th>').join('')
+        + '</tr></thead><tbody>' + bodyRows.map(row => '<tr>'
+          + headerCells.map((_, i) => '<td>' + renderInlineMarkdown(row[i] || '') + '</td>').join('')
+          + '</tr>').join('') + '</tbody></table></div>';
+    }
+
+    if (lines.every(line => /^\s*&gt;\s?/.test(escapeHTML(line)))) {
+      return '<blockquote>' + lines.map(line => renderInlineMarkdown(line.replace(/^\s*>\s?/, ''))).join('<br>') + '</blockquote>';
     }
 
     return '<p>' + renderInlineMarkdown(trimmed).replace(/\n/g, '<br>') + '</p>';
