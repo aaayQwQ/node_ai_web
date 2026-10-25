@@ -756,3 +756,13 @@ body.sidebar-collapsed .sidebar { flex-basis: 70px; padding-right: 8px; padding-
 .tool-result-bubble summary { cursor: pointer; }
 .tool-result-bubble pre { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 #mcpCommandRow small, #mcpEnvRow small { color: var(--muted); }
+
+.history-item { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 2px 0; padding: 2px; border: 1px solid transparent; border-radius: 10px; }
+.history-item.active { background: var(--paper); border-color: var(--line); }
+.history-open { flex: 1; min-width: 0; overflow: hidden; padding: 8px 7px; border: 0; background: transparent; color: var(--ink); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.history-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s ease; }
+.history-item:hover .history-actions, .history-item:focus-within .history-actions { opacity: 1; }
+.history-action { padding: 5px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
+.history-action:hover { background: var(--paper-2); color: var(--ink); }
+.history-delete:hover { color: #e36a6a; }
+@media (max-width: 760px) { .history-actions { opacity: 1; } }
