@@ -177,6 +177,28 @@ function renderMarkdown(value) {
   return blocks.join('');
 }
 
+function parseJSONField(value, label) {
+  if (!String(value || '').trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('必须是 JSON 对象');
+    return parsed;
+  } catch (error) {
+    throw new Error(label + '格式错误：' + error.message);
+  }
+}
+
+function parseJSONArray(value, label) {
+  if (!String(value || '').trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) throw new Error('必须是 JSON 数组');
+    return parsed;
+  } catch (error) {
+    throw new Error(label + '格式错误：' + error.message);
+  }
+}
+
 function openSettings() {
   $('settingsResult').textContent = '';
   $('settings').showModal();
@@ -353,6 +375,10 @@ async function loadSettings() {
     $('model').value = state.config.model || '';
     $('systemPrompt').value = state.config.systemPrompt || '';
     $('temperature').value = state.config.temperature ?? 0.7;
+    $('topP').value = state.config.topP ?? 1;
+    $('maxTokens').value = state.config.maxTokens ?? 4096;
+    $('contextWindow').value = state.config.contextWindow ?? 20;
+    $('customHeaders').value = JSON.stringify(state.config.customHeaders || {}, null, 2);
     $('webPassword').value = '';
     $('webPassword').placeholder = '留空则保留当前密码';
     setConnectionStatus('本地服务已就绪', 'online');
@@ -550,14 +576,24 @@ async function sendMessage(event) {
 }
 
 async function saveSettings() {
-  const body = {
+  let body;
+  try {
+  body = {
     baseURL: $('baseURL').value.trim(),
     apiKey: $('apiKey').value.trim(),
     model: $('model').value.trim(),
     systemPrompt: $('systemPrompt').value,
     temperature: Number($('temperature').value),
+    topP: Number($('topP').value),
+    maxTokens: Number($('maxTokens').value),
+    contextWindow: Number($('contextWindow').value),
+    customHeaders: parseJSONField($('customHeaders').value, '自定义请求头'),
     webPassword: $('webPassword').value
   };
+  } catch (error) {
+    $('settingsResult').textContent = error.message;
+    return;
+  }
 
   $('settingsResult').textContent = '正在保存…';
 
