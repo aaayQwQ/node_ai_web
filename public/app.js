@@ -254,12 +254,15 @@ function renderHistory() {
   list.replaceChildren();
 
   for (const chat of state.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = chat.title || '新对话';
-    button.title = '点击打开；右键重命名';
-    button.className = chat.id === state.activeChatId ? 'active' : '';
-    button.addEventListener('click', () => {
+    const item = document.createElement('div');
+    item.className = 'history-item' + (chat.id === state.activeChatId ? ' active' : '');
+
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'history-open';
+    open.textContent = chat.title || '新对话';
+    open.title = chat.title || '新对话';
+    open.addEventListener('click', () => {
       state.activeChatId = chat.id;
       state.thinking = Boolean(chat.thinking);
       updateThinkingButton();
@@ -267,16 +270,49 @@ function renderHistory() {
       renderMessages();
       closeSidebarOnMobile();
     });
-    button.addEventListener('contextmenu', event => {
-      event.preventDefault();
+
+    const rename = document.createElement('button');
+    rename.type = 'button';
+    rename.className = 'history-action';
+    rename.textContent = '改名';
+    rename.title = '重命名对话';
+    rename.setAttribute('aria-label', '重命名对话');
+    rename.addEventListener('click', event => {
+      event.stopPropagation();
       const title = window.prompt('重命名对话', chat.title || '新对话');
       if (title === null) return;
-      chat.title = title.trim() || '新对话';
+      chat.title = title.trim().slice(0, 100) || '新对话';
+      chat.updatedAt = Date.now();
+      saveHistory();
+      renderHistory();
+    });
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'history-action history-delete';
+    remove.textContent = '删除';
+    remove.title = '删除对话';
+    remove.setAttribute('aria-label', '删除对话');
+    remove.addEventListener('click', event => {
+      event.stopPropagation();
+      if (!window.confirm('确定删除对话“' + (chat.title || '新对话') + '”？此操作不可撤销。')) return;
+      const index = state.chats.findIndex(item => item.id === chat.id);
+      if (index >= 0) state.chats.splice(index, 1);
+      if (state.activeChatId === chat.id) {
+        const next = state.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        state.activeChatId = next ? next.id : null;
+        state.thinking = next ? Boolean(next.thinking) : false;
+      }
       saveHistory();
       renderHistory();
       renderMessages();
     });
-    list.appendChild(button);
+
+    const actions = document.createElement('div');
+    actions.className = 'history-actions';
+    actions.append(rename, remove);
+    item.append(open, actions);
+    list.appendChild(item);
   }
 }
 
