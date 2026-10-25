@@ -209,9 +209,12 @@ function renderMessages() {
   if (!chat || chat.messages.length === 0) {
     const welcome = document.createElement('div');
     welcome.className = 'welcome';
-    welcome.innerHTML = '<div class="welcome-mark">◈</div>'
-      + '<h1>有什么可以帮忙？</h1>'
-      + '<p>输入问题，开始一段新的对话。</p>';
+    welcome.innerHTML = '<div class="welcome-meta"><span>NODE AI WEB</span><span>LOCAL / OPEN API</span></div>'
+      + '<div class="welcome-index">01<span>.</span></div>'
+      + '<div class="welcome-copy"><p class="eyebrow">一个干净的开始</p>'
+      + '<h1>从这里，<br>开始对话<span class="accent-dot">。</span></h1>'
+      + '<p class="welcome-description">你的模型，你的密钥，你的工作区。<br>没有多余的东西。</p></div>'
+      + '<div class="welcome-foot"><span>OPENAI-COMPATIBLE</span><span>SCROLL TO EXPLORE ↓</span></div>';
     container.appendChild(welcome);
     $('modelSelect').title = state.config.model || '默认模型';
     return;
@@ -662,7 +665,9 @@ document.querySelectorAll('.close-modal').forEach(button => {
   button.addEventListener('click', () => button.closest('dialog').close());
 });
 
-if (localStorage.getItem('node-ai-web-theme') === 'light') {
+if (localStorage.getItem('node-ai-web-theme') === 'dark') {
+  document.body.classList.remove('light');
+} else {
   document.body.classList.add('light');
 }
 
