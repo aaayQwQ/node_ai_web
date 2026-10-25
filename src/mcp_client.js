@@ -165,6 +165,7 @@ module.exports = function createMCPManager(root, log) {
       let buffer = '';
       let stderr = '';
       let settled = false;
+      let requestSent = false;
       const timer = setTimeout(() => finish(new Error('MCP Stdio 请求超时。')), server.timeout || TIMEOUT_MS);
       function finish(error, result) {
         if (settled) return;
@@ -187,7 +188,14 @@ module.exports = function createMCPManager(root, log) {
           if (!line.trim()) continue;
           let message;
           try { message = JSON.parse(line); } catch (_) { continue; }
-          if (message.id === id) {
+          if (message.id === 1 && !requestSent) {
+            if (message.error) {
+              finish(new Error(message.error.message || 'MCP 初始化失败。'));
+              return;
+            }
+            requestSent = true;
+            child.stdin.write(next);
+          } else if (message.id === id) {
             if (message.error) finish(new Error(message.error.message || 'MCP JSON-RPC 调用失败。'));
             else finish(null, message.result || {});
           }
@@ -202,14 +210,7 @@ module.exports = function createMCPManager(root, log) {
         + JSON.stringify({ jsonrpc: '2.0', id, method, params: params || {} }) + '\n';
       child.stdin.write(JSON.stringify(init) + '\n');
       // Wait for initialize response before sending requests.
-      const initDeadline = Date.now() + 2500;
-      const sendTimer = setInterval(() => {
-        if (settled) { clearInterval(sendTimer); return; }
-        if (Date.now() >= initDeadline) { clearInterval(sendTimer); child.stdin.write(next); }
-      }, 25);
-      const oldData = child.stdout.listeners('data');
-      // Notifications/initialization are handled by the same line parser; request id collision is avoided.
-      child.once('spawn', () => {});
+      // Continue only after the server replies to initialize, as required by MCP.
     });
   }
 
