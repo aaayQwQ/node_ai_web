@@ -99,6 +99,7 @@ module.exports = function createMCPManager(root, log) {
     if (index >= 0) servers[index] = value;
     else servers.unshift(value);
     writeAll(servers);
+    httpSessions.delete(value.id);
     return publicServer(value);
   }
 
@@ -107,6 +108,7 @@ module.exports = function createMCPManager(root, log) {
     const next = servers.filter(item => item.id !== id);
     if (next.length === servers.length) throw new Error('找不到指定的 MCP 服务。');
     writeAll(next);
+    httpSessions.delete(id);
     return { ok: true };
   }
 
