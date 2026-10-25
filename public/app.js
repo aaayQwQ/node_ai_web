@@ -9,7 +9,8 @@ const state = {
   controller: null,
   thinking: false,
   auth: localStorage.getItem('node-ai-web-password') || '',
-  nextChatId: 1
+  nextChatId: 1,
+  providerModels: []
 };
 
 function requestHeaders(extra) {
@@ -427,9 +428,7 @@ function renderMessages() {
   });
 
   container.scrollTop = container.scrollHeight;
-  $('modelSelect').title = $('modelSelect').value
-    || state.config.model
-    || '默认模型';
+  $('modelSelect').title = $('modelSelect').selectedOptions[0]?.textContent || '请选择已勾选的模型';
   updateThinkingButton();
   if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
     try {
@@ -478,18 +477,25 @@ async function loadModels() {
     const result = await api('/v1/models');
     const models = Array.isArray(result.data) ? result.data : [];
     const select = $('modelSelect');
-    const selected = select.value || state.config.model || '';
-
-    select.replaceChildren(new Option('使用默认模型', ''));
-
-    for (const model of models) {
-      if (!model || !model.id) continue;
-      select.add(new Option(model.id, model.id));
+    const selected = select.value || '';
+    select.replaceChildren(new Option('选择已启用的模型', ''));
+    const providers = Array.isArray(state.config.providers) ? state.config.providers : [];
+    const enabled = Array.isArray(state.config.selectedModels)
+      ? state.config.selectedModels.filter(item => item.enabled !== false)
+      : [];
+    for (const item of enabled) {
+      const provider = providers.find(entry => entry.id === item.providerId);
+      if (!provider) continue;
+      const value = provider.id + '::' + item.modelId;
+      select.add(new Option(item.modelId + ' / ' + provider.name, value));
     }
-
+    if (!providers.length && state.config.model && state.config.baseURL && state.config.apiKeySet) {
+      const legacyEnabled = enabled.some(item => item.providerId === 'legacy' && item.modelId === state.config.model);
+      if (legacyEnabled) select.add(new Option(state.config.model + ' / 默认服务商', state.config.model));
+    }
     select.value = selected;
     if (select.value !== selected) select.value = '';
-    select.title = select.value || state.config.model || '默认模型';
+    select.title = select.selectedOptions[0]?.textContent || '请选择已勾选的模型';
   } catch (error) {
     console.warn('读取模型列表失败：', error.message);
   }
@@ -729,6 +735,8 @@ async function saveSettings() {
     baseURL: $('baseURL').value.trim(),
     apiKey: $('apiKey').value.trim(),
     model: $('model').value.trim(),
+    providers: Array.isArray(state.config.providers) ? state.config.providers : [],
+    selectedModels: Array.isArray(state.config.selectedModels) ? state.config.selectedModels : [],
     systemPrompt: $('systemPrompt').value,
     temperature: Number($('temperature').value),
     topP: Number($('topP').value),
@@ -784,7 +792,8 @@ async function testConnection() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         baseURL: $('baseURL').value.trim(),
-        apiKey: $('apiKey').value.trim()
+        apiKey: $('apiKey').value.trim(),
+        customHeaders: parseJSONField($('customHeaders').value, '自定义请求头')
       })
     });
 
@@ -1000,6 +1009,170 @@ async function saveMCPServer() {
   }
 }
 
+
+function providerDefaults() {
+  return Array.isArray(state.config.providers) ? state.config.providers : [];
+}
+function resetProviderForm() {
+  $('providerId').value = '';
+  $('providerName').value = '';
+  $('providerBaseURL').value = '';
+  $('providerApiKey').value = '';
+  $('providerApiKey').placeholder = '粘贴 API Key';
+  $('providerDefaultModel').value = '';
+  $('providerHeaders').value = '{}';
+  $('providerEditorTitle').textContent = '添加服务商';
+  $('providerResult').textContent = '';
+  $('providerModels').replaceChildren();
+  $('providerModelCount').textContent = '尚未读取';
+}
+function editProvider(provider) {
+  $('providerId').value = provider.id;
+  $('providerName').value = provider.name || '';
+  $('providerBaseURL').value = provider.baseURL || '';
+  $('providerApiKey').value = '';
+  $('providerApiKey').placeholder = provider.apiKeySet ? '密钥已保存；留空保留现有密钥' : '粘贴 API Key';
+  $('providerDefaultModel').value = provider.model || '';
+  $('providerHeaders').value = JSON.stringify(provider.customHeaders || {}, null, 2);
+  $('providerEditorTitle').textContent = '编辑服务商：' + (provider.name || '');
+  $('providerResult').textContent = '';
+  $('providerModels').replaceChildren();
+  $('providerModelCount').textContent = '点击“读取模型”加载列表';
+}
+function renderProviders() {
+  const list = $('providerList');
+  list.replaceChildren();
+  const providers = providerDefaults();
+  if (!providers.length) {
+    const empty = document.createElement('p');
+    empty.className = 'provider-empty';
+    empty.textContent = '还没有服务商。点击右上角“添加服务商”开始配置。';
+    list.appendChild(empty);
+    return;
+  }
+  for (const provider of providers) {
+    const card = document.createElement('section');
+    card.className = 'provider-card';
+    const title = document.createElement('strong');
+    title.textContent = provider.name;
+    const detail = document.createElement('small');
+    detail.textContent = (provider.baseURL || '') + ' · ' + (provider.apiKeySet ? '密钥已保存' : '未配置密钥');
+    const edit = document.createElement('button');
+    edit.type = 'button'; edit.textContent = '管理模型 / 编辑';
+    edit.addEventListener('click', () => editProvider(provider));
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.textContent = '删除';
+    remove.addEventListener('click', async () => {
+      if (!confirm('确定删除服务商“' + provider.name + '”？相关勾选模型也会移除。')) return;
+      const providersNext = providerDefaults().filter(item => item.id !== provider.id);
+      const selectedNext = (state.config.selectedModels || []).filter(item => item.providerId !== provider.id);
+      await persistProviders(providersNext, selectedNext);
+      renderProviders();
+      resetProviderForm();
+    });
+    card.append(title, detail, edit, remove);
+    list.appendChild(card);
+  }
+}
+async function persistProviders(providers, selectedModels) {
+  const result = await api('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ providers, selectedModels })
+  });
+  state.config = result.config;
+  await loadSettings();
+  await loadModels();
+}
+async function openProviders() {
+  resetProviderForm();
+  renderProviders();
+  $('providersDialog').showModal();
+}
+async function readProviderModels() {
+  const output = $('providerResult');
+  output.textContent = '正在读取模型列表…';
+  try {
+    const id = $('providerId').value || 'preview';
+    const provider = {
+      id,
+      name: $('providerName').value.trim() || '新服务商',
+      baseURL: $('providerBaseURL').value.trim(),
+      apiKey: $('providerApiKey').value.trim(),
+      customHeaders: parseJSONField($('providerHeaders').value, '自定义请求头')
+    };
+    const saved = providerDefaults().find(item => item.id === id);
+    if (!provider.apiKey && saved) provider.apiKey = saved.apiKey || '';
+    if (!provider.baseURL || !provider.apiKey) throw new Error('请先填写 Base URL 和 API Key。');
+    const result = await api('/api/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseURL: provider.baseURL, apiKey: provider.apiKey, customHeaders: provider.customHeaders })
+    });
+    const models = Array.isArray(result.models) ? result.models.filter(item => item && item.id) : [];
+    state.providerModels = models.map(item => item.id);
+    const selected = (state.config.selectedModels || []).filter(item => item.providerId === id && item.enabled !== false);
+    const selectedSet = new Set(selected.map(item => item.modelId));
+    const holder = $('providerModels');
+    holder.replaceChildren();
+    for (const model of models) {
+      const label = document.createElement('label');
+      label.className = 'provider-model-option';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = model.id;
+      checkbox.checked = selectedSet.has(model.id);
+      const name = document.createElement('span');
+      name.textContent = model.id;
+      label.append(checkbox, name);
+      holder.appendChild(label);
+    }
+    $('providerModelCount').textContent = '读取到 ' + models.length + ' 个模型';
+    output.textContent = '读取成功 · ' + result.rtt + ' ms。模型不会自动加入聊天列表，请勾选后保存。';
+  } catch (error) {
+    $('providerResult').textContent = '读取失败：' + error.message;
+  }
+}
+async function saveProvider() {
+  try {
+    const id = $('providerId').value || makeId();
+    const existing = providerDefaults().find(item => item.id === id);
+    const provider = {
+      id,
+      name: $('providerName').value.trim(),
+      baseURL: $('providerBaseURL').value.trim(),
+      apiKey: $('providerApiKey').value.trim(),
+      model: $('providerDefaultModel').value.trim(),
+      customHeaders: parseJSONField($('providerHeaders').value, '自定义请求头')
+    };
+    if (!provider.name || !provider.baseURL) throw new Error('服务商名称和 Base URL 必填。');
+    if (!provider.apiKey && !(existing && existing.apiKeySet)) throw new Error('请填写 API Key。');
+    const providers = providerDefaults().filter(item => item.id !== id);
+    providers.push(provider);
+    const selected = Array.isArray(state.config.selectedModels) ? state.config.selectedModels : [];
+    await persistProviders(providers, selected);
+    $('providerId').value = id;
+    $('providerResult').textContent = '服务商已保存。现在点击“读取模型”，勾选模型后再保存选择。';
+    renderProviders();
+    showToast('服务商已保存', 'success');
+  } catch (error) {
+    $('providerResult').textContent = error.message;
+  }
+}
+async function saveSelectedProviderModels() {
+  const id = $('providerId').value;
+  if (!id || !providerDefaults().some(item => item.id === id)) {
+    $('providerResult').textContent = '请先保存服务商，再选择模型。';
+    return;
+  }
+  const checked = Array.from($('providerModels').querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+  const keepOther = (state.config.selectedModels || []).filter(item => item.providerId !== id);
+  const selectedModels = keepOther.concat(checked.map(modelId => ({ providerId: id, modelId, enabled: true })));
+  await persistProviders(providerDefaults(), selectedModels);
+  $('providerResult').textContent = '已保存 ' + checked.length + ' 个模型。聊天框只显示已勾选的模型。';
+  showToast('模型选择已保存', 'success');
+}
+
 function closeSidebarOnMobile() {
   if (window.matchMedia('(max-width: 760px)').matches) {
     document.body.classList.remove('sidebar-open');
@@ -1030,6 +1203,13 @@ $('settingsBtn').addEventListener('click', openSettings);
 $('profileBtn').addEventListener('click', openSettings);
 $('pluginsBtn').addEventListener('click', openMCPManager);
 $('mcpType').addEventListener('change', updateMCPTypeFields);
+$('mcpAddTop').addEventListener('click', () => { resetMCPForm(); $('mcpName').focus(); });
+$('openProviders').addEventListener('click', openProviders);
+$('providerAddTop').addEventListener('click', () => { resetProviderForm(); $('providerName').focus(); });
+$('providerReset').addEventListener('click', resetProviderForm);
+$('providerSave').addEventListener('click', saveProvider);
+$('providerTest').addEventListener('click', readProviderModels);
+$('saveSelectedModels').addEventListener('click', saveSelectedProviderModels);
 $('mcpReset').addEventListener('click', resetMCPForm);
 $('mcpSave').addEventListener('click', saveMCPServer);
 $('statusBtn').addEventListener('click', async () => {
