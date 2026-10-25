@@ -1762,3 +1762,62 @@ body.light .history-list button { color: #687386; }
   .breadcrumb { gap: 5px; font-size: 11px; }
   .model-menu { max-width: 42vw; font-size: 11px; }
 }
+
+/* 2026-10-25: prevent modal borders and headings from colliding.
+   Keep header content inside the form's normal box instead of using
+   negative margins that can make borders cross text at narrow widths. */
+.modal > form {
+  box-sizing: border-box;
+  padding: 24px;
+}
+.modal-header {
+  box-sizing: border-box;
+  margin: 0 0 22px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.modal-header > div,
+.modal-header h2,
+.modal-header p {
+  min-width: 0;
+}
+.modal-header h2 {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.modal-header p {
+  line-height: 1.6;
+}
+.modal label {
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+.modal label > input:not([type="checkbox"]),
+.modal label > textarea,
+.modal label > select {
+  display: block;
+  box-sizing: border-box;
+  margin: 0;
+}
+.modal input,
+.modal textarea,
+.modal select {
+  box-sizing: border-box;
+}
+#mcpManager .mcp-modal-header {
+  top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+@media (max-width: 760px) {
+  .modal > form { padding: 16px; }
+  .modal-header {
+    margin: 0 0 18px;
+    padding: 0 0 16px;
+    gap: 10px;
+  }
+  .modal-header h2 { font-size: clamp(21px, 5vw, 29px); }
+  .modal-header-actions { flex-wrap: wrap; }
+}
+
