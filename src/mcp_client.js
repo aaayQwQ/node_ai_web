@@ -4,11 +4,15 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const net = require('net');
+const tls = require('tls');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { URL } = require('url');
 
 const PROTOCOL_VERSION = '2024-11-05';
 const TIMEOUT_MS = 15000;
+const MAX_WS_MESSAGE = 2 * 1024 * 1024;
 
 module.exports = function createMCPManager(root, log) {
   const file = path.join(root, 'config', 'mcp-servers.json');
@@ -38,7 +42,7 @@ module.exports = function createMCPManager(root, log) {
     if (!/^[a-zA-Z0-9_-]{1,20}$/.test(value.id) || value.id.includes('__')) throw new Error('MCP 服务 ID 只能包含字母、数字、下划线和连字符，且不能包含双下划线。');
     value.name = String(value.name || '自定义 MCP 服务').trim().slice(0, 100);
     value.type = String(value.type || 'http').toLowerCase();
-    if (!['http', 'sse', 'stdio'].includes(value.type)) throw new Error('MCP 类型仅支持 HTTP、SSE、Stdio。');
+    if (!['http', 'sse', 'websocket', 'stdio'].includes(value.type)) throw new Error('MCP 类型仅支持 HTTP、SSE、WebSocket、Stdio。');
     value.enabled = Boolean(value.enabled);
     value.approval = value.approval === 'auto' ? 'auto' : 'confirm';
     value.headers = value.headers && typeof value.headers === 'object' && !Array.isArray(value.headers) ? value.headers : {};
@@ -55,7 +59,10 @@ module.exports = function createMCPManager(root, log) {
       value.url = String(value.url || '').trim();
       if (!value.url) throw new Error('HTTP/SSE 服务必须填写 Endpoint URL。');
       const parsed = new URL(value.url);
-      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('MCP URL 只支持 HTTP 或 HTTPS。');
+      const allowedProtocols = value.type === 'websocket' ? ['ws:', 'wss:'] : value.type === 'sse' ? ['http:', 'https:'] : ['http:', 'https:'];
+      if (!allowedProtocols.includes(parsed.protocol)) {
+        throw new Error(value.type === 'websocket' ? 'WebSocket MCP URL 必须以 ws:// 或 wss:// 开头。' : 'HTTP/SSE MCP URL 只支持 HTTP 或 HTTPS。');
+      }
       if (parsed.username || parsed.password) throw new Error('请勿将账号密码写在 URL 中。');
     }
     return value;
@@ -318,9 +325,217 @@ module.exports = function createMCPManager(root, log) {
     });
   }
 
+
+  // Minimal dependency-free WebSocket JSON-RPC transport for MCP endpoints.
+  // The connection is opened per operation; initialize and the requested method
+  // run on the same socket, which supports servers requiring a single WS session.
+  function websocketRPC(server, method, params) {
+    return new Promise((resolve, reject) => {
+      let url;
+      try { url = new URL(server.url); } catch (_) { reject(new Error('WebSocket MCP URL 无效。')); return; }
+      if (!['ws:', 'wss:'].includes(url.protocol)) {
+        reject(new Error('WebSocket MCP URL 必须以 ws:// 或 wss:// 开头。'));
+        return;
+      }
+      const secure = url.protocol === 'wss:';
+      const port = Number(url.port || (secure ? 443 : 80));
+      const key = crypto.randomBytes(16).toString('base64');
+      const expectedAccept = crypto.createHash('sha1')
+        .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+      const connectOptions = { host: url.hostname, port };
+      if (secure) connectOptions.servername = url.hostname;
+      const socket = secure ? tls.connect(connectOptions) : net.connect(connectOptions);
+      let buffer = Buffer.alloc(0);
+      let upgraded = false;
+      let settled = false;
+      let responseQueue = [];
+      let responseWaiters = [];
+      let nextRpcId = 1;
+      let requestTimer;
+      let fragmentOpcode = 0;
+      let fragments = [];
+
+      const timeout = Math.max(1000, Number(server.timeout) || TIMEOUT_MS);
+      function finish(error, result) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(requestTimer);
+        try { socket.destroy(); } catch (_) {}
+        if (error) reject(error); else resolve(result);
+      }
+      function deliver(message) {
+        const index = responseQueue.findIndex(item => item && item.id !== undefined);
+        if (responseWaiters.length) responseWaiters.shift()(message);
+        else responseQueue.push(message);
+      }
+      function waitMessage() {
+        return new Promise((res, rej) => {
+          if (responseQueue.length) { res(responseQueue.shift()); return; }
+          if (settled) { rej(new Error('WebSocket MCP 连接已关闭。')); return; }
+          responseWaiters.push(res);
+        });
+      }
+      function sendFrame(opcode, payload) {
+        if (socket.destroyed) throw new Error('WebSocket MCP 连接已关闭。');
+        const data = Buffer.isBuffer(payload) ? payload : Buffer.from(payload || '');
+        let header;
+        if (data.length < 126) {
+          header = Buffer.alloc(2);
+          header[1] = 0x80 | data.length;
+        } else if (data.length <= 0xffff) {
+          header = Buffer.alloc(4);
+          header[1] = 0x80 | 126;
+          header.writeUInt16BE(data.length, 2);
+        } else {
+          header = Buffer.alloc(10);
+          header[1] = 0x80 | 127;
+          header.writeUInt32BE(0, 2);
+          header.writeUInt32BE(data.length, 6);
+        }
+        header[0] = 0x80 | opcode;
+        const mask = crypto.randomBytes(4);
+        const masked = Buffer.alloc(data.length);
+        for (let i = 0; i < data.length; i++) masked[i] = data[i] ^ mask[i & 3];
+        socket.write(Buffer.concat([header, mask, masked]));
+      }
+      function sendJSON(value) {
+        sendFrame(1, JSON.stringify(value));
+      }
+      function rpcRequest(rpcMethod, rpcParams) {
+        const id = nextRpcId++;
+        sendJSON({ jsonrpc: '2.0', id, method: rpcMethod, params: rpcParams || {} });
+        return waitMessage().then(message => {
+          if (!message || message.id !== id) throw new Error('WebSocket MCP 返回了不匹配的 JSON-RPC 响应。');
+          if (message.error) throw new Error(message.error.message || 'WebSocket MCP JSON-RPC 调用失败。');
+          return message.result || {};
+        });
+      }
+      function parseFrames() {
+        while (buffer.length >= 2 && !settled) {
+          const first = buffer[0], second = buffer[1];
+          const fin = Boolean(first & 0x80);
+          const opcode = first & 0x0f;
+          const masked = Boolean(second & 0x80);
+          let length = second & 0x7f;
+          let offset = 2;
+          if (length === 126) {
+            if (buffer.length < 4) return;
+            length = buffer.readUInt16BE(2); offset = 4;
+          } else if (length === 127) {
+            if (buffer.length < 10) return;
+            const high = buffer.readUInt32BE(2);
+            const low = buffer.readUInt32BE(6);
+            if (high > 0 || low > MAX_WS_MESSAGE) return finish(new Error('WebSocket MCP 消息超过 2 MB 限制。'));
+            length = low; offset = 10;
+          }
+          const maskLength = masked ? 4 : 0;
+          if (length > MAX_WS_MESSAGE) return finish(new Error('WebSocket MCP 消息超过 2 MB 限制。'));
+          if (buffer.length < offset + maskLength + length) return;
+          let payload = buffer.subarray(offset + maskLength, offset + maskLength + length);
+          if (masked) {
+            const mask = buffer.subarray(offset, offset + 4);
+            const decoded = Buffer.alloc(payload.length);
+            for (let i = 0; i < payload.length; i++) decoded[i] = payload[i] ^ mask[i & 3];
+            payload = decoded;
+          }
+          buffer = buffer.subarray(offset + maskLength + length);
+          if (opcode === 8) return finish(new Error('WebSocket MCP 服务关闭了连接。'));
+          if (opcode === 9) { try { sendFrame(10, payload); } catch (_) {} continue; }
+          if (opcode === 10) continue;
+          if (opcode === 1 || opcode === 2) {
+            fragmentOpcode = opcode;
+            fragments = [payload];
+          } else if (opcode === 0 && fragmentOpcode) {
+            fragments.push(payload);
+          } else continue;
+          if (!fin) continue;
+          const complete = Buffer.concat(fragments);
+          fragmentOpcode = 0; fragments = [];
+          if (opcode === 2) return finish(new Error('WebSocket MCP 返回了二进制消息，当前只支持 JSON 文本消息。'));
+          let parsed;
+          try { parsed = JSON.parse(complete.toString('utf8')); }
+          catch (_) { return finish(new Error('WebSocket MCP 返回了无效的 JSON-RPC 消息。')); }
+          if (parsed && parsed.id !== undefined) deliver(parsed);
+        }
+      }
+      socket.setTimeout(timeout, () => finish(new Error('WebSocket MCP 请求超时。')));
+      socket.on('error', error => finish(new Error('WebSocket MCP 连接失败：' + error.message)));
+      socket.on('close', () => {
+        if (!settled) finish(new Error('WebSocket MCP 连接意外关闭。'));
+      });
+      socket.on('data', chunk => {
+        buffer = Buffer.concat([buffer, chunk]);
+        if (!upgraded) {
+          const end = buffer.indexOf('\r\n\r\n');
+          if (end < 0) {
+            if (buffer.length > 32768) finish(new Error('WebSocket MCP 握手响应过大。'));
+            return;
+          }
+          const head = buffer.subarray(0, end).toString('latin1');
+          const rest = buffer.subarray(end + 4);
+          buffer = rest;
+          const lines = head.split('\r\n');
+          if (!/^HTTP\/1\.[01] 101\b/.test(lines[0] || '')) {
+            return finish(new Error('WebSocket MCP 握手失败：' + (lines[0] || '无 HTTP 状态')));
+          }
+          const responseHeaders = {};
+          for (const line of lines.slice(1)) {
+            const at = line.indexOf(':');
+            if (at > 0) responseHeaders[line.slice(0, at).trim().toLowerCase()] = line.slice(at + 1).trim();
+          }
+          if (responseHeaders['sec-websocket-accept'] !== expectedAccept) {
+            return finish(new Error('WebSocket MCP 握手校验失败（Sec-WebSocket-Accept 不匹配）。'));
+          }
+          upgraded = true;
+          parseFrames();
+        } else parseFrames();
+      });
+      socket.once(secure ? 'secureConnect' : 'connect', () => {
+        const target = url.pathname + url.search || '/';
+        const defaultPort = secure ? 443 : 80;
+        const host = (url.hostname.includes(':') ? '[' + url.hostname + ']' : url.hostname)
+          + (port === defaultPort ? '' : ':' + port);
+        const headers = Object.assign({}, server.headers || {});
+        const lines = [
+          'GET ' + target + ' HTTP/1.1',
+          'Host: ' + host,
+          'Upgrade: websocket',
+          'Connection: Upgrade',
+          'Sec-WebSocket-Key: ' + key,
+          'Sec-WebSocket-Version: 13'
+        ];
+        for (const [name, value] of Object.entries(headers)) {
+          if (!/^[a-zA-Z0-9-]{1,80}$/.test(name) || /[\r\n]/.test(String(value))) continue;
+          if (/^(host|upgrade|connection|sec-websocket-key|sec-websocket-version)$/i.test(name)) continue;
+          lines.push(name + ': ' + value);
+        }
+        socket.write(lines.join('\r\n') + '\r\n\r\n');
+      });
+      requestTimer = setTimeout(() => finish(new Error('WebSocket MCP 请求超时。')), timeout);
+      (async () => {
+        try {
+          // Wait until the server completes the HTTP Upgrade handshake.
+          while (!upgraded && !settled) await new Promise(r => setTimeout(r, 10));
+          if (settled) return;
+          const initialized = await rpcRequest('initialize', {
+            protocolVersion: PROTOCOL_VERSION,
+            capabilities: {},
+            clientInfo: { name: 'Node AI Web', version: '1.0.0' }
+          });
+          sendJSON({ jsonrpc: '2.0', method: 'notifications/initialized' });
+          const result = await rpcRequest(method, params);
+          finish(null, result);
+        } catch (error) {
+          finish(error);
+        }
+      })();
+    });
+  }
+
   async function rpc(server, method, params) {
     if (server.type === 'stdio') return stdioCall(server, method, params);
     if (server.type === 'sse') return sseRPC(server, method, params);
+    if (server.type === 'websocket') return websocketRPC(server, method, params);
 
     let session = httpSessions.get(server.id);
     if (!session) {
