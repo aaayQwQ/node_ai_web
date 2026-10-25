@@ -766,3 +766,51 @@ body.sidebar-collapsed .sidebar { flex-basis: 70px; padding-right: 8px; padding-
 .history-action:hover { background: var(--paper-2); color: var(--ink); }
 .history-delete:hover { color: #e36a6a; }
 @media (max-width: 760px) { .history-actions { opacity: 1; } }
+
+
+/* Production polish: prevent sidebar labels from collapsing into vertical glyphs. */
+.sidebar,
+.sidebar-bottom,
+.sidebar-top,
+.history-list,
+.nav-button,
+.profile-button,
+.new-chat {
+  min-width: 0;
+}
+.sidebar { width: var(--sidebar-width); }
+.sidebar-bottom { width: 100%; grid-template-columns: minmax(0, 1fr); }
+.sidebar-bottom > .side-section-label,
+.sidebar-bottom > .nav-button,
+.sidebar-bottom > .profile-button { width: 100%; min-width: 0; }
+.nav-button {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nav-button > span {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: max-content;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+.nav-button > span:nth-child(2) { flex: 1 1 auto; min-width: max-content; }
+.sidebar .side-section-label,
+.sidebar .history-heading { width: 100%; white-space: nowrap; }
+.sidebar .side-section-label span,
+.sidebar .history-heading span { min-width: max-content; white-space: nowrap; word-break: keep-all; }
+body.sidebar-collapsed .sidebar-bottom { width: 100%; }
+body.sidebar-collapsed .nav-button { justify-content: center; }
+body.sidebar-collapsed .nav-button > span:not(.nav-index) { display: none; }
+
+@media (max-width: 700px) {
+  .sidebar { width: min(300px, 86vw); }
+  .sidebar-bottom > .nav-button { min-height: 42px; }
+}
