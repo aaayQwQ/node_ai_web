@@ -34,6 +34,7 @@ module.exports = function createMCPManager(root, log) {
   function normalize(input, existing) {
     const value = Object.assign({}, existing || {}, input || {});
     value.id = String(value.id || ('mcp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7)));
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(value.id) || value.id.includes('__')) throw new Error('MCP 服务 ID 只能包含字母、数字、下划线和连字符，且不能包含双下划线。');
     value.name = String(value.name || '自定义 MCP 服务').trim().slice(0, 100);
     value.type = String(value.type || 'http').toLowerCase();
     if (!['http', 'sse', 'stdio'].includes(value.type)) throw new Error('MCP 类型仅支持 HTTP、SSE、Stdio。');
@@ -62,7 +63,7 @@ module.exports = function createMCPManager(root, log) {
   function publicServer(server) {
     const copy = Object.assign({}, server);
     copy.headers = Object.keys(copy.headers || {}).reduce((result, key) => {
-      result[key] = /authorization|token|secret|api[-_]?key/i.test(key) ? '••••••••' : copy.headers[key];
+      result[key] = /authorization|auth|token|secret|api[-_]?key/i.test(key) ? '••••••••' : copy.headers[key];
       return result;
     }, {});
     copy.env = Object.keys(copy.env || {}).reduce((result, key) => {
