@@ -925,3 +925,81 @@ body.sidebar-collapsed .nav-button > span:not(.nav-index) { display: none; }
 @media (max-width: 700px) {
   .sidebar { min-width: 0; }
 }
+
+
+/* Hard override for deployed layouts: sidebar labels must never stack vertically. */
+html body .sidebar {
+  flex: 0 0 var(--sidebar-width) !important;
+  width: var(--sidebar-width) !important;
+  min-width: 248px !important;
+}
+html body .sidebar-bottom {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  align-self: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  gap: 4px !important;
+}
+html body .sidebar-bottom > .side-section-label,
+html body .sidebar-bottom > .nav-button,
+html body .sidebar-bottom > .profile-button {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  writing-mode: horizontal-tb !important;
+}
+html body .sidebar-bottom > .nav-button {
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  min-height: 42px !important;
+  padding: 8px 12px !important;
+  gap: 10px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+html body .sidebar-bottom > .nav-button > span {
+  display: inline-block !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+html body .sidebar-bottom > .side-section-label {
+  display: block !important;
+  padding: 18px 12px 8px !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+html body .thinking-button.thinking-active,
+html body .thinking-button[aria-pressed="true"] {
+  border-color: #83a9ff !important;
+  background: linear-gradient(135deg, #294575, #243655) !important;
+  color: #f3f7ff !important;
+  box-shadow: 0 0 0 2px #7ca4ff33, 0 5px 18px #315ba544 !important;
+}
+html body .thinking-button.thinking-active .thinking-symbol,
+html body .thinking-button[aria-pressed="true"] .thinking-symbol {
+  background: #8baeff !important;
+  border-color: #8baeff !important;
+  color: #14213b !important;
+}
+@media (max-width: 700px) {
+  html body .sidebar {
+    min-width: 0 !important;
+    width: min(300px, 86vw) !important;
+  }
+  html body .sidebar-bottom > .nav-button { min-height: 44px !important; }
+}
