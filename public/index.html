@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#212121">
+  <meta name="theme-color" content="#171717">
   <meta name="description" content="A small, local-first OpenAI-compatible chat workspace.">
   <title>Node AI Web — 工作区</title>
-  <link rel="stylesheet" href="/style.css?v=20261025-librechat">
+  <link rel="stylesheet" href="/style.css?v=20261025-workbench-v3">
 </head>
 <body class="dark">
   <aside class="sidebar" id="sidebar">
@@ -29,6 +29,7 @@
     <div class="sidebar-bottom">
       <div class="side-section-label"><span>系统</span></div>
       <button class="nav-button" id="settingsBtn"><span>连接设置</span></button>
+      <button class="nav-button" id="providersBtn"><span>API 服务商</span></button>
       <button class="nav-button" id="pluginsBtn"><span>插件</span></button>
       <button class="nav-button" id="statusBtn"><span>运行状态</span></button>
       <button class="profile-button" id="profileBtn">
@@ -44,6 +45,7 @@
         <button class="icon-button mobile-menu" id="mobileMenuTop" aria-label="打开菜单">☰</button>
         <div class="breadcrumb"><span>工作区</span><span class="breadcrumb-slash">/</span><strong>对话</strong></div>
         <span class="topbar-rule" aria-hidden="true"></span>
+        <select class="model-menu provider-menu" id="providerSelect" aria-label="选择 API 服务商"><option value="">默认服务商</option></select>
         <select class="model-menu" id="modelSelect" aria-label="选择模型" title="选择模型">
           <option value="">默认模型</option>
         </select>
@@ -142,6 +144,7 @@
     </form>
   </dialog>
 
+  <dialog class="modal" id="providersManager"><form method="dialog"><div class="modal-header"><div><h2>API 服务商</h2><p>管理多个 OpenAI 兼容 API。</p></div><button class="icon-button close-modal" aria-label="关闭">×</button></div><div id="providerList" class="plugin-list"></div><div class="provider-editor"><h3 id="providerEditorTitle">添加服务商</h3><input id="providerId" type="hidden"><label>名称<input id="providerName" required></label><label>Base URL<input id="providerBaseURL" required placeholder="https://api.example.com/v1"></label><label>API Key<input id="providerApiKey" type="password" autocomplete="new-password" placeholder="编辑时留空保留密钥"></label><label>默认模型 ID<input id="providerModel"></label><label>系统提示词<textarea id="providerSystemPrompt" rows="2"></textarea></label><label>自定义请求头 JSON<textarea id="providerHeaders" rows="2">{}</textarea></label><label class="inline-check"><input id="providerEnabled" type="checkbox" checked> 启用此服务商</label><div class="modal-actions"><button type="button" id="providerTest">测试连接</button><button type="button" id="providerReset">清空表单</button><button type="button" id="providerSave" class="primary-button">保存服务商</button></div><p class="form-result" id="providerResult" role="status"></p></div></form></dialog>
   <dialog class="modal" id="mcpManager">
     <form method="dialog" id="mcpManagerForm">
       <div class="modal-header"><div><h2>MCP 服务管理</h2><p>连接自定义 MCP 工具服务器。Stdio 会在运行服务的主机上执行命令，请仅添加可信程序。</p></div><button class="icon-button close-modal" aria-label="关闭">×</button></div>
@@ -189,6 +192,6 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-  <script defer src="/app.js?v=20261025-librechat"></script>
+  <script defer src="/app.js?v=20261025-workbench-v3"></script>
 </body>
 </html>

@@ -18,6 +18,11 @@ function start(root) {
   const mcp = createMCPManager(root, log);
   const requestCounts = new Map();
   const historyFile = path.join(root, 'config', 'history.json');
+  const providersFile = path.join(root, 'config', 'providers.json');
+  function readProviders(){try{const x=JSON.parse(fs.readFileSync(providersFile,'utf8'));return Array.isArray(x)?x:[]}catch(_){return[]}}
+  function writeProviders(x){fs.mkdirSync(path.dirname(providersFile),{recursive:true});const t=providersFile+'.tmp';fs.writeFileSync(t,JSON.stringify(x,null,2)+'\n',{mode:0o600});try{fs.chmodSync(t,0o600)}catch(_){}fs.renameSync(t,providersFile)}
+  function safeProvider(x){return Object.assign({},x,{apiKey:'',apiKeySet:Boolean(x.apiKey),apiKeyHint:x.apiKey?'••••••••'+x.apiKey.slice(-4):'',customHeaders:Object.fromEntries(Object.entries(x.customHeaders||{}).map(([k,v])=>[k,/authorization|auth|token|secret|api[-_]?key/i.test(k)?'••••••••':v]))})}
+  function providerById(id,fallback){if(!id)return fallback;return readProviders().find(x=>x.id===String(id)&&x.enabled!==false)||fallback}
 
   plugins.init();
 
@@ -134,6 +139,20 @@ function start(root) {
       return true;
     }
 
+    if(pathname==='/api/providers'&&request.method==='GET'){sendJSON(response,200,readProviders().map(safeProvider));return true}
+    if(pathname==='/api/providers'&&request.method==='POST'){
+      const b=await readJSON(request),a=readProviders(),id=String(b.id||('provider-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7)));
+      if(!/^[a-zA-Z0-9_-]{1,60}$/.test(id)){sendJSON(response,400,{error:{message:'服务商 ID 格式无效。'}});return true}
+      const i=a.findIndex(x=>x.id===id),old=i>=0?a[i]:null,apiKey=String(b.apiKey||(old&&old.apiKey)||'').trim(),baseURL=String(b.baseURL||'').trim(),name=String(b.name||'').trim().slice(0,80);
+      if(!name||!baseURL||!apiKey){sendJSON(response,400,{error:{message:'服务商名称、Base URL 和 API Key 均为必填项。'}});return true}
+      try{proxy.normalizeBaseURL(baseURL)}catch(e){sendJSON(response,400,{error:{message:'Base URL 无效：'+e.message}});return true}
+      const headers=b.customHeaders&&typeof b.customHeaders==='object'&&!Array.isArray(b.customHeaders)?Object.fromEntries(Object.entries(b.customHeaders).filter(([k,v])=>/^[A-Za-z0-9-]{1,80}$/.test(k)&&typeof v==='string'&&v.length<=4000&&!/[\\r\\n]/.test(v))):(old&&old.customHeaders)||{};
+      const item={id,name,baseURL,apiKey,model:String(b.model||'').trim().slice(0,200),systemPrompt:String(b.systemPrompt||'').slice(0,12000),temperature:Number.isFinite(Number(b.temperature))?Math.max(0,Math.min(2,Number(b.temperature))):0.7,topP:Number.isFinite(Number(b.topP))?Math.max(0,Math.min(1,Number(b.topP))):1,maxTokens:Math.max(1,Math.min(200000,Number(b.maxTokens)||4096)),enabled:b.enabled!==false,customHeaders:headers};
+      if(i>=0)a[i]=item;else a.unshift(item);writeProviders(a);sendJSON(response,200,{ok:true,provider:safeProvider(item)});return true
+    }
+    const pm=pathname.match(/^\\/api\\/providers\\/([a-zA-Z0-9_-]+)$/);
+    if(pm&&request.method==='DELETE'){const a=readProviders(),n=a.filter(x=>x.id!==pm[1]);if(n.length===a.length){sendJSON(response,404,{error:{message:'找不到指定的服务商。'}});return true}writeProviders(n);sendJSON(response,200,{ok:true});return true}
+    if(pathname==='/api/providers/test'&&request.method==='POST'){const b=await readJSON(request);try{const r=await proxy.check(b.baseURL,b.apiKey,b.customHeaders||{}),d=JSON.parse(r.body);sendJSON(response,200,{ok:true,url:r.url,count:Array.isArray(d.data)?d.data.length:0})}catch(e){sendJSON(response,e.status||502,{error:{message:e.message,url:e.url||''}})}return true}
     if (pathname === '/api/config' && request.method === 'GET') {
       sendJSON(response, 200, safeConfig(currentConfig));
       return true;
@@ -344,13 +363,14 @@ function start(root) {
     }
 
     if (pathname === '/v1/models' && request.method === 'GET') {
+      const modelConfig=providerById(new URL(request.url,'http://localhost').searchParams.get('provider'),currentConfig);
       try {
         const result = await proxy.request(
-          proxy.endpointURL(currentConfig.baseURL, '/v1/models'),
+          proxy.endpointURL(modelConfig.baseURL, '/v1/models'),
           {
             method: 'GET',
-            headers: Object.assign({}, currentConfig.customHeaders || {}, currentConfig.apiKey
-              ? { Authorization: 'Bearer ' + currentConfig.apiKey }
+            headers: Object.assign({}, modelConfig.customHeaders || {}, modelConfig.apiKey
+              ? { Authorization: 'Bearer ' + modelConfig.apiKey }
               : {})
           },
           null,
@@ -416,20 +436,10 @@ function start(root) {
         return true;
       }
 
-      if (!currentConfig.baseURL || !currentConfig.apiKey) {
-        sendJSON(response, 400, {
-          error: { message: '请先在设置中填写 Base URL 和 API Key。' }
-        });
-        return true;
-      }
-
-      const input = await readJSON(request);
-      const payload = Object.assign({
-        model: currentConfig.model,
-        temperature: currentConfig.temperature,
-        top_p: currentConfig.topP,
-        max_tokens: currentConfig.maxTokens
-      }, input);
+      const input=await readJSON(request),chatConfig=Object.assign({},currentConfig,providerById(input.providerId,currentConfig));
+      delete input.providerId;
+      if(!chatConfig.baseURL||!chatConfig.apiKey){sendJSON(response,400,{error:{message:'请先为所选服务商配置 Base URL 和 API Key。'}});return true}
+      const payload=Object.assign({model:chatConfig.model,temperature:chatConfig.temperature,top_p:chatConfig.topP,max_tokens:chatConfig.maxTokens},input);
 
       if (!Array.isArray(payload.messages)) {
         sendJSON(response, 400, {
@@ -439,20 +449,20 @@ function start(root) {
       }
 
       if (
-        currentConfig.systemPrompt &&
+        chatConfig.systemPrompt &&
         !payload.messages.some(message => message && message.role === 'system')
       ) {
         payload.messages.unshift({
           role: 'system',
-          content: currentConfig.systemPrompt
+          content: chatConfig.systemPrompt
         });
       }
 
       const context = {
         request: payload,
         config: {
-          baseURL: currentConfig.baseURL,
-          model: currentConfig.model
+          baseURL: chatConfig.baseURL,
+          model: chatConfig.model
         }
       };
 
@@ -466,7 +476,7 @@ function start(root) {
       });
 
       try {
-        await proxy.chat(currentConfig, context.request, response, abortSignal, log);
+        await proxy.chat(chatConfig, context.request, response, abortSignal, log);
         plugins.hook('afterResponse', {
           request: context.request,
           status: response.statusCode

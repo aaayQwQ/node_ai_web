@@ -9,7 +9,9 @@ const state = {
   controller: null,
   thinking: false,
   auth: localStorage.getItem('node-ai-web-password') || '',
-  nextChatId: 1
+  nextChatId: 1,
+  providers: [],
+  activeProviderId: localStorage.getItem('node-ai-web-provider') || ''
 };
 
 function requestHeaders(extra) {
@@ -445,6 +447,7 @@ function setConnectionStatus(message, status) {
   $('connectionDot').classList.toggle('offline', status === 'offline');
 }
 
+async function loadProviders(){try{state.providers=await api('/api/providers');const s=$('providerSelect'),v=state.activeProviderId;s.replaceChildren(new Option('默认服务商',''));for(const p of state.providers)if(p.enabled)s.add(new Option(p.name,p.id));s.value=state.providers.some(p=>p.id===v&&p.enabled)?v:'';state.activeProviderId=s.value;localStorage.setItem('node-ai-web-provider',s.value)}catch(e){console.warn('读取服务商失败：',e.message)}}
 async function loadSettings() {
   try {
     state.config = await api('/api/config');
@@ -463,7 +466,7 @@ async function loadSettings() {
     $('webPassword').value = '';
     $('webPassword').placeholder = '留空则保留当前密码';
     setConnectionStatus('本地服务已就绪', 'online');
-    const ready = Boolean(state.config.baseURL && state.config.apiKeySet);
+    const ready = Boolean(state.config.baseURL && state.config.apiKeySet) || state.providers.some(p=>p.enabled&&p.baseURL&&p.apiKeySet);
     document.body.classList.toggle('needs-api-config', !ready);
     if (!ready) setConnectionStatus('需要配置 API', 'offline');
     renderMessages();
@@ -475,7 +478,7 @@ async function loadSettings() {
 
 async function loadModels() {
   try {
-    const result = await api('/v1/models');
+    const result = await api('/v1/models' + (state.activeProviderId ? '?provider=' + encodeURIComponent(state.activeProviderId) : ''));
     const models = Array.isArray(result.data) ? result.data : [];
     const select = $('modelSelect');
     const selected = select.value || state.config.model || '';
@@ -565,7 +568,8 @@ async function sendMessage(event) {
   const content = input.value.trim();
   if (!content || state.controller) return;
 
-  if (!state.config.baseURL || !state.config.apiKeySet) {
+  const activeProvider=state.providers.find(p=>p.id===state.activeProviderId&&p.enabled);
+  if(activeProvider?(!activeProvider.baseURL||!activeProvider.apiKeySet):(!state.config.baseURL||!state.config.apiKeySet)){
     showToast('请先配置 Base URL 和 API Key，再发送消息。', 'warning');
     openSettings();
     return;
@@ -620,7 +624,8 @@ async function sendMessage(event) {
       });
 
       const payload = {
-        model: $('modelSelect').value || state.config.model,
+        providerId: state.activeProviderId || undefined,
+        model: $('modelSelect').value || (state.providers.find(p=>p.id===state.activeProviderId)||state.config).model,
         messages: contextMessages,
         stream: true,
         temperature: Number(state.config.temperature ?? 0.7),
@@ -982,12 +987,20 @@ async function saveMCPServer() {
   }
 }
 
+function resetProviderForm(){['providerId','providerName','providerBaseURL','providerApiKey','providerModel','providerSystemPrompt'].forEach(id=>$(id).value='');$('providerHeaders').value='{}';$('providerEnabled').checked=true;$('providerEditorTitle').textContent='添加服务商';$('providerResult').textContent=''}
+function editProvider(p){$('providerId').value=p.id;$('providerName').value=p.name;$('providerBaseURL').value=p.baseURL;$('providerApiKey').value='';$('providerApiKey').placeholder=p.apiKeySet?'已保存密钥（留空保留）':'填写 API Key';$('providerModel').value=p.model||'';$('providerSystemPrompt').value=p.systemPrompt||'';$('providerHeaders').value=JSON.stringify(Object.fromEntries(Object.entries(p.customHeaders||{}).map(([k,v])=>[k,v==='••••••••'?'':v])),null,2);$('providerEnabled').checked=p.enabled!==false;$('providerEditorTitle').textContent='编辑服务商'}
+async function refreshProviderList(){await loadProviders();const l=$('providerList');l.replaceChildren();if(!state.providers.length){const p=document.createElement('p');p.textContent='尚无自定义服务商；可继续使用连接设置里的默认服务商。';l.append(p)}for(const p of state.providers){const c=document.createElement('section');c.className='plugin-card';const t=document.createElement('strong');t.textContent=p.name;const d=document.createElement('p');d.textContent=p.baseURL+' · '+(p.enabled?'已启用':'已停用')+' · '+(p.apiKeySet?'密钥已保存':'未配置密钥');const e=document.createElement('button');e.type='button';e.textContent='编辑';e.onclick=()=>editProvider(p);const r=document.createElement('button');r.type='button';r.textContent='删除';r.onclick=async()=>{if(!confirm('确定删除服务商“'+p.name+'”？'))return;try{await api('/api/providers/'+encodeURIComponent(p.id),{method:'DELETE'});if(state.activeProviderId===p.id)state.activeProviderId='';localStorage.setItem('node-ai-web-provider',state.activeProviderId);await refreshProviderList();await loadModels()}catch(err){showToast(err.message,'warning')}};c.append(t,d,e,r);l.append(c)}}
+async function saveProvider(){try{const b={id:$('providerId').value||undefined,name:$('providerName').value.trim(),baseURL:$('providerBaseURL').value.trim(),apiKey:$('providerApiKey').value.trim(),model:$('providerModel').value.trim(),systemPrompt:$('providerSystemPrompt').value,customHeaders:parseJSONField($('providerHeaders').value,'自定义请求头'),enabled:$('providerEnabled').checked};const r=await api('/api/providers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});$('providerResult').textContent='已保存：'+r.provider.name;$('providerApiKey').value='';await refreshProviderList();showToast('服务商已保存','success')}catch(e){$('providerResult').textContent='保存失败：'+e.message}}
+async function testProvider(){try{const r=await api('/api/providers/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseURL:$('providerBaseURL').value.trim(),apiKey:$('providerApiKey').value.trim(),customHeaders:parseJSONField($('providerHeaders').value,'自定义请求头')})});$('providerResult').textContent='连接成功 · '+r.count+' 个模型 · '+r.url}catch(e){$('providerResult').textContent='连接失败：'+e.message}}
 function closeSidebarOnMobile() {
   if (window.matchMedia('(max-width: 760px)').matches) {
     document.body.classList.remove('sidebar-open');
   }
 }
 
+$('providersBtn').addEventListener('click',async()=>{resetProviderForm();await refreshProviderList();$('providersManager').showModal()});
+$('providerSave').addEventListener('click',saveProvider);$('providerTest').addEventListener('click',testProvider);$('providerReset').addEventListener('click',resetProviderForm);
+$('providerSelect').addEventListener('change',async()=>{state.activeProviderId=$('providerSelect').value;localStorage.setItem('node-ai-web-provider',state.activeProviderId);await loadModels();const p=state.providers.find(x=>x.id===state.activeProviderId);showToast('已切换服务商：'+(p?p.name:'默认服务商'),'success')});
 $('newChat').addEventListener('click', () => {
   createChat();
   closeSidebarOnMobile();
@@ -1117,5 +1130,6 @@ if (localStorage.getItem('node-ai-web-theme') === 'light') {
   renderHistory();
   renderMessages();
   await loadSettings();
+  await loadProviders();
   await loadModels();
 })();
