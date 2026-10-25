@@ -864,6 +864,7 @@ function resetMCPForm() {
   $('mcpArgs').value = '[]';
   $('mcpEnv').value = '{}';
   $('mcpHeaders').value = '{}';
+  $('mcpToken').value = '';
   $('mcpApproval').value = 'confirm';
   $('mcpEnabled').checked = true;
   $('mcpEditorTitle').textContent = '添加 MCP 服务';
@@ -888,6 +889,8 @@ function editMCPServer(server) {
   $('mcpArgs').value = JSON.stringify(server.args || [], null, 2);
   $('mcpEnv').value = JSON.stringify(server.env || {}, null, 2);
   $('mcpHeaders').value = JSON.stringify(server.headers || {}, null, 2);
+  // Secret headers are masked by the API. Keep this blank unless the user wants to replace the token.
+  $('mcpToken').value = '';
   $('mcpApproval').value = server.approval || 'confirm';
   $('mcpEnabled').checked = Boolean(server.enabled);
   $('mcpEditorTitle').textContent = '编辑 MCP 服务';
@@ -934,9 +937,13 @@ async function refreshMCPServers() {
           status.textContent = server.type.toUpperCase() + ' · 连接正常 · ' + (server.enabled ? '已启用' : '已停用');
           showToast('连接成功，发现 ' + tools.length + ' 个工具', 'success');
         } catch (error) {
-          toolSummary.textContent = '连接失败：' + error.message;
-          status.textContent = server.type.toUpperCase() + ' · 连接失败';
-          showToast(error.message, 'warning');
+          const rawMessage = String(error.message || '未知错误');
+          const authFailure = /(?:HTTP 401|HTTP 403|unauthorized|invalid or missing token|invalid token|missing token)/i.test(rawMessage);
+          toolSummary.textContent = authFailure
+            ? '连接失败：服务端拒绝认证。请编辑服务并填写访问 Token；默认发送 Authorization: Bearer Token。若服务要求 X-API-Key 等自定义头，请配置 Headers。原始错误：' + rawMessage
+            : '连接失败：' + rawMessage;
+          status.textContent = server.type.toUpperCase() + (authFailure ? ' · 需要认证 Token' : ' · 连接失败');
+          showToast(authFailure ? 'MCP 认证失败，请检查 Token / Headers' : rawMessage, 'warning');
         } finally {
           discover.disabled = false;
           discover.textContent = '测试 / 刷新工具';
@@ -983,6 +990,10 @@ async function saveMCPServer() {
       approval: $('mcpApproval').value,
       enabled: $('mcpEnabled').checked
     };
+    const mcpToken = $('mcpToken').value.trim();
+    if (mcpToken) {
+      body.headers.Authorization = 'Bearer ' + mcpToken;
+    }
     const result = await api('/api/mcp/servers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
