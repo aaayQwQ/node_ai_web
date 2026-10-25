@@ -473,34 +473,23 @@ async function loadSettings() {
 }
 
 async function loadModels() {
-  try {
-    const result = await api('/v1/models');
-    const models = Array.isArray(result.data) ? result.data : [];
-    const select = $('modelSelect');
-    const selected = select.value || '';
-    select.replaceChildren(new Option('选择已启用的模型', ''));
-    const providers = Array.isArray(state.config.providers) ? state.config.providers : [];
-    const enabled = Array.isArray(state.config.selectedModels)
-      ? state.config.selectedModels.filter(item => item.enabled !== false)
-      : [];
-    for (const item of enabled) {
-      const provider = providers.find(entry => entry.id === item.providerId);
-      if (!provider) continue;
-      const value = provider.id + '::' + item.modelId;
-      select.add(new Option(item.modelId + ' / ' + provider.name, value));
-    }
-    if (!providers.length && state.config.model && state.config.baseURL && state.config.apiKeySet) {
-      const legacyEnabled = enabled.some(item => item.providerId === 'legacy' && item.modelId === state.config.model);
-      if (legacyEnabled) select.add(new Option(state.config.model + ' / 默认服务商', state.config.model));
-    }
-    select.value = selected;
-    if (select.value !== selected) select.value = '';
-    select.title = select.selectedOptions[0]?.textContent || '请选择已勾选的模型';
-  } catch (error) {
-    console.warn('读取模型列表失败：', error.message);
+  const select = $('modelSelect');
+  const selected = select.value || '';
+  const providers = Array.isArray(state.config.providers) ? state.config.providers : [];
+  const enabled = Array.isArray(state.config.selectedModels)
+    ? state.config.selectedModels.filter(item => item && item.enabled !== false)
+    : [];
+  select.replaceChildren(new Option('选择已启用的模型', ''));
+  for (const item of enabled) {
+    const provider = providers.find(entry => entry.id === item.providerId);
+    if (!provider) continue;
+    const value = provider.id + '::' + item.modelId;
+    select.add(new Option(item.modelId + ' / ' + provider.name, value));
   }
+  select.value = selected;
+  if (select.value !== selected) select.value = '';
+  select.title = select.selectedOptions[0]?.textContent || '请选择已勾选的模型';
 }
-
 function updateThinkingButton() {
   const button = $('thinkingBtn');
   if (!button) return;
@@ -1203,7 +1192,7 @@ $('settingsBtn').addEventListener('click', openSettings);
 $('profileBtn').addEventListener('click', openSettings);
 $('pluginsBtn').addEventListener('click', openMCPManager);
 $('mcpType').addEventListener('change', updateMCPTypeFields);
-$('mcpAddTop').addEventListener('click', () => { resetMCPForm(); $('mcpName').focus(); });
+$('mcpAddTop').addEventListener('click', () => { resetMCPForm(); $('mcpEditorTitle').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('mcpName').focus(); });
 $('openProviders').addEventListener('click', openProviders);
 $('providerAddTop').addEventListener('click', () => { resetProviderForm(); $('providerName').focus(); });
 $('providerReset').addEventListener('click', resetProviderForm);
