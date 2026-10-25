@@ -12,9 +12,9 @@
   --accent-soft: #f6ded7;
   --panel: #faf9f5;
   --sidebar-width: 276px;
-  --mono: 'DM Mono', 'SFMono-Regular', Consolas, monospace;
-  --sans: 'DM Sans', 'Segoe UI', sans-serif;
-  --display: 'Space Grotesk', 'Arial', sans-serif;
+  --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --sans: 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --display: 'Arial', 'Helvetica Neue', sans-serif;
 }
 
 * { box-sizing: border-box; }
