@@ -751,3 +751,8 @@ body.sidebar-collapsed .sidebar { flex-basis: 70px; padding-right: 8px; padding-
 #mcpServerList .plugin-card p { margin: 7px 0 10px; color: var(--muted); font-size: 12px; }
 #mcpServerList .plugin-card button { margin-right: 6px; padding: 7px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
 .modal label small { line-height: 1.5; }
+
+.tool-result-bubble { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px; background: var(--paper-2); color: var(--muted); font-size: 12px; }
+.tool-result-bubble summary { cursor: pointer; }
+.tool-result-bubble pre { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+#mcpCommandRow small, #mcpEnvRow small { color: var(--muted); }
