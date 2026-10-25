@@ -326,11 +326,13 @@ function start(root) {
 
     if (pathname === '/api/test' && request.method === 'POST') {
       const body = await readJSON(request);
-      const baseURL = body.baseURL || currentConfig.baseURL;
-      const apiKey = body.apiKey || currentConfig.apiKey;
+      const savedProvider = body.providerId && (currentConfig.providers || []).find(item => item.id === body.providerId);
+      const baseURL = body.baseURL || (savedProvider && savedProvider.baseURL) || currentConfig.baseURL;
+      const apiKey = body.apiKey || (savedProvider && savedProvider.apiKey) || currentConfig.apiKey;
+      const customHeaders = body.customHeaders || (savedProvider && savedProvider.customHeaders) || currentConfig.customHeaders;
 
       try {
-        const result = await proxy.check(baseURL, apiKey, body.customHeaders || currentConfig.customHeaders);
+        const result = await proxy.check(baseURL, apiKey, customHeaders);
         let data;
 
         try {
