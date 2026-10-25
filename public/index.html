@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171717">
   <meta name="description" content="A small, local-first OpenAI-compatible chat workspace.">
   <title>Node AI Web — 工作区</title>
-  <link rel="stylesheet" href="/style.css?v=20261025-welcome-card-fix-2">
+  <link rel="stylesheet" href="/style.css?v=20261025-mcp-token-ui-1">
 </head>
 <body class="dark">
   <aside class="sidebar" id="sidebar">
@@ -156,7 +156,8 @@
         <label id="mcpCommandRow" hidden>Command<input id="mcpCommand" placeholder="/absolute/path/to/server"></label>
         <label id="mcpArgsRow" hidden>启动参数（JSON 数组）<textarea id="mcpArgs" rows="2" placeholder='["--port","3000"]'></textarea></label>
         <label id="mcpEnvRow" hidden>环境变量（JSON 对象）<textarea id="mcpEnv" rows="2" placeholder='{"TOKEN":"..."}'></textarea></label>
-        <label>Headers（JSON）<textarea id="mcpHeaders" rows="3" placeholder='{"Authorization":"Bearer ..."}'></textarea></label>
+        <label>访问 Token（可选）<input id="mcpToken" type="password" autocomplete="new-password" placeholder="粘贴 MCP 服务提供的 Token"><small>保存后通过 Authorization: Bearer Token 发送。编辑已有服务时留空可保留已保存的 Token。</small></label>
+        <label>Headers（JSON）<textarea id="mcpHeaders" rows="3" placeholder='{"X-API-Key":"..."}'></textarea><small>用于额外请求头；如果服务要求 X-API-Key 等自定义认证方式，请在这里填写。</small></label>
         <label>工具调用策略<select id="mcpApproval"><option value="confirm">每次调用前确认</option><option value="auto">自动调用</option></select></label>
         <label class="inline-check"><input id="mcpEnabled" type="checkbox" checked> 启用此服务</label>
         <div class="modal-actions"><button type="button" id="mcpReset">清空表单</button><button type="button" id="mcpSave" class="primary-button">保存服务</button></div>
@@ -212,6 +213,6 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-  <script defer src="/app.js?v=20261025-provider-layout-3"></script>
+  <script defer src="/app.js?v=20261025-mcp-token-ui-1"></script>
 </body>
 </html>
