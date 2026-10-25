@@ -316,6 +316,20 @@ function renderHistory() {
   }
 }
 
+function getWelcomeCopy() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) {
+    return { title: '早上好，今天想先处理什么？', description: '把问题、代码，或者一个还没成形的想法放在这里。' };
+  }
+  if (hour >= 11 && hour < 18) {
+    return { title: '有什么新想法？', description: '从一个问题开始。我们可以一起梳理思路、写代码，或把复杂的事讲清楚。' };
+  }
+  if (hour >= 18 && hour < 23) {
+    return { title: '晚上好，想从哪里开始？', description: '不用先把问题想完整，先写下来，再一步步理清。' };
+  }
+  return { title: '还在探索什么？', description: '先把想法放下来。无论是一个小问题，还是一件复杂的事，都可以从这里开始。' };
+}
+
 function renderMessages() {
   const container = $('messages');
   container.replaceChildren();
@@ -326,8 +340,8 @@ function renderMessages() {
     const configured = Boolean(state.config.baseURL && state.config.apiKeySet);
     welcome.className = 'welcome welcome-modern' + (configured ? '' : ' needs-config');
     welcome.innerHTML = '<div class="welcome-brand">NODE AI WEB</div>'
-      + '<h1>' + (configured ? '有什么新想法？' : '先连接你的模型，<br>再开始对话。') + '</h1>'
-      + '<p class="welcome-description">' + (configured ? '写代码、整理思路、探索问题。让对话从这里开始。' : '这是你的私人 AI 工作区。配置兼容 OpenAI 的 API 地址与密钥，即可开始使用。密钥由本地服务保存。') + '</p>'
+      + '<h1>' + (configured ? getWelcomeCopy().title : '先连接你的模型，<br>再开始对话。') + '</h1>'
+      + '<p class="welcome-description">' + (configured ? getWelcomeCopy().description : '这是你的私人 AI 工作区。配置兼容 OpenAI 的 API 地址与密钥，即可开始使用。密钥由本地服务保存。') + '</p>'
       + (configured
         ? '<div class="welcome-suggestions"><button type="button" data-prompt="帮我解释一段代码">解释一段代码 <span>↗</span></button><button type="button" data-prompt="帮我整理一个想法">整理一个想法 <span>↗</span></button><button type="button" data-prompt="用清晰的步骤解决一个问题">拆解一个问题 <span>↗</span></button></div>'
         : '<div class="setup-card"><div class="setup-card-icon">⌘</div><div class="setup-card-copy"><strong>连接你的 API</strong><span>Base URL · API Key · 默认模型</span></div><button type="button" class="setup-cta" id="welcomeSetupBtn">去配置 API Key <span>→</span></button></div><div class="setup-foot"><span>支持 OpenAI 兼容接口</span><span>DeepSeek · OpenAI · OpenRouter · 自定义</span></div>')
@@ -974,6 +988,7 @@ $('prompt').addEventListener('keydown', event => {
 $('prompt').addEventListener('input', event => {
   event.target.style.height = 'auto';
   event.target.style.height = Math.min(event.target.scrollHeight, 200) + 'px';
+  $('composer').classList.toggle('composer-has-text', Boolean(event.target.value.trim()));
 });
 
 $('settingsBtn').addEventListener('click', openSettings);
@@ -1017,6 +1032,9 @@ $('thinkingBtn').addEventListener('click', () => {
   if (chat) chat.thinking = state.thinking;
   updateThinkingButton();
   saveHistory();
+  showToast(state.thinking
+    ? '已开启深度思考。实际效果取决于当前模型与服务商。'
+    : '已关闭深度思考模式。', 'info');
 });
 $('attachBtn').addEventListener('click', () => {
   showToast('附件上传暂未接入；此按钮目前保留为工具入口。', 'info');

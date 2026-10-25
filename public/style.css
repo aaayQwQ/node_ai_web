@@ -1003,3 +1003,78 @@ html body .thinking-button[aria-pressed="true"] .thinking-symbol {
   }
   html body .sidebar-bottom > .nav-button { min-height: 44px !important; }
 }
+
+
+/* Small, intentional interactions — warmth without decorative noise. */
+.welcome-modern {
+  animation: welcome-arrive .55s cubic-bezier(.2,.75,.25,1) both;
+}
+.welcome-modern .welcome-brand {
+  animation: welcome-item-arrive .45s .04s both;
+}
+.welcome-modern h1 {
+  animation: welcome-item-arrive .5s .1s both;
+}
+.welcome-modern .welcome-description {
+  animation: welcome-item-arrive .5s .17s both;
+}
+.welcome-modern .welcome-suggestions,
+.welcome-modern .setup-card,
+.welcome-modern .setup-foot {
+  animation: welcome-item-arrive .5s .23s both;
+}
+.welcome-suggestions button {
+  transition: transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
+}
+.welcome-suggestions button:active,
+.setup-cta:active,
+.new-chat:active,
+.send-button:active,
+.thinking-button:active {
+  transform: translateY(1px) scale(.985);
+}
+.composer {
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--ink) 34%, transparent);
+  box-shadow: 0 8px 30px rgba(0,0,0,.08);
+}
+.composer.composer-has-text {
+  border-color: color-mix(in srgb, var(--ink) 28%, transparent);
+}
+#prompt {
+  transition: height .12s ease;
+}
+.history-item {
+  transition: background .16s ease, transform .16s ease, opacity .16s ease;
+}
+.history-item:active {
+  transform: scale(.99);
+}
+.toast {
+  backdrop-filter: blur(14px);
+}
+@keyframes welcome-arrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes welcome-item-arrive {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-modern,
+  .welcome-modern .welcome-brand,
+  .welcome-modern h1,
+  .welcome-modern .welcome-description,
+  .welcome-modern .welcome-suggestions,
+  .welcome-modern .setup-card,
+  .welcome-modern .setup-foot {
+    animation: none !important;
+  }
+  .composer, #prompt, .history-item, .welcome-suggestions button,
+  .setup-cta, .new-chat, .send-button, .thinking-button {
+    transition: none !important;
+  }
+}
