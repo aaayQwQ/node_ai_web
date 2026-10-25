@@ -302,7 +302,7 @@ function start(root) {
       const apiKey = body.apiKey || currentConfig.apiKey;
 
       try {
-        const result = await proxy.check(baseURL, apiKey);
+        const result = await proxy.check(baseURL, apiKey, currentConfig.customHeaders);
         let data;
 
         try {
@@ -349,9 +349,9 @@ function start(root) {
           proxy.endpointURL(currentConfig.baseURL, '/v1/models'),
           {
             method: 'GET',
-            headers: currentConfig.apiKey
+            headers: Object.assign({}, currentConfig.customHeaders || {}, currentConfig.apiKey
               ? { Authorization: 'Bearer ' + currentConfig.apiKey }
-              : {}
+              : {})
           },
           null,
           20000
@@ -386,10 +386,10 @@ function start(root) {
           proxy.endpointURL(currentConfig.baseURL, '/v1/embeddings'),
           {
             method: 'POST',
-            headers: {
+            headers: Object.assign({}, currentConfig.customHeaders || {}, {
               'Content-Type': 'application/json',
               Authorization: 'Bearer ' + currentConfig.apiKey
-            }
+            })
           },
           JSON.stringify(body),
           120000
