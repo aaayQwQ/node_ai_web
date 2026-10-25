@@ -462,7 +462,7 @@ async function loadSettings() {
     $('webPassword').value = '';
     $('webPassword').placeholder = '留空则保留当前密码';
     setConnectionStatus('本地服务已就绪', 'online');
-    const ready = Boolean(state.config.baseURL && state.config.apiKeySet);
+    const ready = Boolean((state.config.baseURL && state.config.apiKeySet) || (state.config.providers || []).some(provider => provider.baseURL && provider.apiKeySet));
     document.body.classList.toggle('needs-api-config', !ready);
     if (!ready) setConnectionStatus('需要配置 API', 'offline');
     renderMessages();
@@ -758,7 +758,7 @@ async function saveSettings() {
     await loadSettings();
     await loadModels();
     $('settingsResult').textContent = '设置已保存。';
-    const ready = Boolean(state.config.baseURL && state.config.apiKeySet);
+    const ready = Boolean((state.config.baseURL && state.config.apiKeySet) || (state.config.providers || []).some(provider => provider.baseURL && provider.apiKeySet));
     if (ready) {
       showToast('连接配置已保存，可以开始对话。', 'success');
       $('settings').close();
