@@ -176,7 +176,7 @@ module.exports = function createMCPManager(root, log) {
       child.stderr.on('data', chunk => { if (stderr.length < 2000) stderr += chunk.toString(); });
       child.on('error', error => finish(new Error('无法启动 MCP 命令：' + error.message)));
       child.on('close', code => {
-        if (!settled) finish(new Error('MCP 进程提前退出 (' + code + ')' + (stderr ? '：' + stderr.slice(0, 300) : '')));
+        if (!settled) finish(new Error('MCP 进程提前退出 (' + code + ')。请检查命令、参数与服务端日志。'));
       });
       child.stdout.on('data', chunk => {
         buffer += chunk.toString();
