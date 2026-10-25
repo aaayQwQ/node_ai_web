@@ -32,6 +32,10 @@ if (!fs.existsSync(configFile)) {
     systemPrompt: 'You are a helpful assistant.',
     webPassword: '',
     temperature: 0.7,
+    topP: 1,
+    maxTokens: 4096,
+    contextWindow: 20,
+    customHeaders: {},
     enabledPlugins: ['sys-prompt-injector']
   }, null, 2) + '\n');
 }
