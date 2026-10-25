@@ -111,6 +111,9 @@ function start(root) {
   function safeConfig(currentConfig) {
     return Object.assign({}, currentConfig, {
       apiKey: '',
+      customHeaders: Object.fromEntries(Object.entries(currentConfig.customHeaders || {}).map(([key, value]) => [
+        key, /authorization|token|secret|api[-_]?key/i.test(key) ? '••••••••' : value
+      ])),
       apiKeySet: Boolean(currentConfig.apiKey),
       apiKeyHint: currentConfig.apiKey
         ? '••••••••' + currentConfig.apiKey.slice(-4)
@@ -152,6 +155,15 @@ function start(root) {
 
       delete update.apiKeySet;
       delete update.apiKeyHint;
+
+      if (update.customHeaders && typeof update.customHeaders === 'object') {
+        const previous = currentConfig.customHeaders || {};
+        for (const [key, value] of Object.entries(update.customHeaders)) {
+          if (value === '••••••••' && Object.prototype.hasOwnProperty.call(previous, key)) {
+            update.customHeaders[key] = previous[key];
+          }
+        }
+      }
 
       const allowed = [
         'host',
@@ -414,7 +426,9 @@ function start(root) {
       const input = await readJSON(request);
       const payload = Object.assign({
         model: currentConfig.model,
-        temperature: currentConfig.temperature
+        temperature: currentConfig.temperature,
+        top_p: currentConfig.topP,
+        max_tokens: currentConfig.maxTokens
       }, input);
 
       if (!Array.isArray(payload.messages)) {
