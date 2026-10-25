@@ -111,6 +111,14 @@ function start(root) {
   function safeConfig(currentConfig) {
     return Object.assign({}, currentConfig, {
       apiKey: '',
+      providers: (currentConfig.providers || []).map(provider => Object.assign({}, provider, {
+        apiKey: '',
+        apiKeySet: Boolean(provider.apiKey),
+        apiKeyHint: provider.apiKey ? '••••••••' + provider.apiKey.slice(-4) : '',
+        customHeaders: Object.fromEntries(Object.entries(provider.customHeaders || {}).map(([key, value]) => [
+          key, /authorization|auth|token|secret|api[-_]?key/i.test(key) ? '••••••••' : value
+        ]))
+      })),
       customHeaders: Object.fromEntries(Object.entries(currentConfig.customHeaders || {}).map(([key, value]) => [
         key, /authorization|auth|token|secret|api[-_]?key/i.test(key) ? '••••••••' : value
       ])),
@@ -156,6 +164,16 @@ function start(root) {
       delete update.apiKeySet;
       delete update.apiKeyHint;
 
+      if (Array.isArray(update.providers)) {
+        const previousProviders = currentConfig.providers || [];
+        update.providers = update.providers.map(provider => {
+          const previous = previousProviders.find(item => item.id === provider.id);
+          return Object.assign({}, provider, {
+            apiKey: provider.apiKey || (previous && previous.apiKey) || ''
+          });
+        });
+      }
+
       if (update.customHeaders && typeof update.customHeaders === 'object') {
         const previous = currentConfig.customHeaders || {};
         for (const [key, value] of Object.entries(update.customHeaders)) {
@@ -178,6 +196,8 @@ function start(root) {
         'maxTokens',
         'contextWindow',
         'customHeaders',
+        'providers',
+        'selectedModels',
         'enabledPlugins'
       ];
       const filtered = {};
@@ -302,7 +322,7 @@ function start(root) {
       const apiKey = body.apiKey || currentConfig.apiKey;
 
       try {
-        const result = await proxy.check(baseURL, apiKey, currentConfig.customHeaders);
+        const result = await proxy.check(baseURL, apiKey, body.customHeaders || currentConfig.customHeaders);
         let data;
 
         try {
@@ -424,8 +444,27 @@ function start(root) {
       }
 
       const input = await readJSON(request);
+      let chatConfig = currentConfig;
+      let requestedModel = input.model;
+      if (typeof requestedModel === 'string' && requestedModel.includes('::')) {
+        const splitAt = requestedModel.indexOf('::');
+        const providerId = requestedModel.slice(0, splitAt);
+        const modelId = requestedModel.slice(splitAt + 2);
+        const provider = (currentConfig.providers || []).find(item => item.id === providerId);
+        if (!provider || !provider.apiKey || !provider.baseURL) {
+          sendJSON(response, 400, { error: { message: '所选服务商不存在或未配置 Base URL / API Key。' } });
+          return true;
+        }
+        chatConfig = Object.assign({}, currentConfig, {
+          baseURL: provider.baseURL,
+          apiKey: provider.apiKey,
+          model: modelId,
+          customHeaders: provider.customHeaders || {}
+        });
+        input.model = modelId;
+      }
       const payload = Object.assign({
-        model: currentConfig.model,
+        model: chatConfig.model,
         temperature: currentConfig.temperature,
         top_p: currentConfig.topP,
         max_tokens: currentConfig.maxTokens
@@ -451,8 +490,8 @@ function start(root) {
       const context = {
         request: payload,
         config: {
-          baseURL: currentConfig.baseURL,
-          model: currentConfig.model
+          baseURL: chatConfig.baseURL,
+          model: chatConfig.model
         }
       };
 
@@ -466,7 +505,7 @@ function start(root) {
       });
 
       try {
-        await proxy.chat(currentConfig, context.request, response, abortSignal, log);
+        await proxy.chat(chatConfig, context.request, response, abortSignal, log);
         plugins.hook('afterResponse', {
           request: context.request,
           status: response.statusCode
