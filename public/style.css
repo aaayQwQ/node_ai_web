@@ -814,3 +814,114 @@ body.sidebar-collapsed .nav-button > span:not(.nav-index) { display: none; }
   .sidebar { width: min(300px, 86vw); }
   .sidebar-bottom > .nav-button { min-height: 42px; }
 }
+
+
+/* Commercial UI polish: readable sidebar navigation and unmistakable thinking toggle */
+.sidebar {
+  flex: 0 0 var(--sidebar-width);
+  width: var(--sidebar-width);
+  min-width: 240px;
+}
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.sidebar-bottom .side-section-label,
+.sidebar-bottom .nav-button,
+.sidebar-bottom .profile-button {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+.sidebar-bottom .nav-button {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 42px;
+  padding: 9px 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+}
+.sidebar-bottom .nav-button > span {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: max-content;
+  max-width: none;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  writing-mode: horizontal-tb;
+}
+.sidebar-bottom .nav-button:hover {
+  padding-left: 10px;
+  border-radius: 9px;
+  background: var(--paper);
+}
+.sidebar-bottom .side-section-label {
+  padding: 16px 10px 8px;
+}
+.thinking-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 112px;
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: var(--paper-2);
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.thinking-button .thinking-symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+}
+.thinking-button:hover {
+  border-color: #7199ff;
+  background: color-mix(in srgb, #7199ff 10%, var(--paper-2));
+}
+.thinking-button.thinking-active,
+.thinking-button[aria-pressed="true"] {
+  border-color: #7ca4ff;
+  background: linear-gradient(135deg, #294575, #243655);
+  color: #f3f7ff;
+  box-shadow: 0 0 0 2px #7ca4ff22, 0 5px 18px #315ba533;
+}
+.thinking-button.thinking-active .thinking-symbol,
+.thinking-button[aria-pressed="true"] .thinking-symbol {
+  border-color: #a8c2ff;
+  background: #7ca4ff;
+  color: #14213b;
+}
+.thinking-button.thinking-active::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8ff0bc;
+  box-shadow: 0 0 0 3px #8ff0bc22;
+}
+@media (max-width: 700px) {
+  .sidebar { min-width: 0; }
+}
