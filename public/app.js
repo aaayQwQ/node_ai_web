@@ -441,13 +441,25 @@ function parseSSEChunk(text, assistantMessage) {
         assistantMessage.reasoning = (assistantMessage.reasoning || '') + delta.reasoning;
       }
 
+      if (delta && Array.isArray(delta.tool_calls)) {
+        assistantMessage.tool_calls = assistantMessage.tool_calls || [];
+        for (const part of delta.tool_calls) {
+          const index = Number(part.index) || 0;
+          if (!assistantMessage.tool_calls[index]) {
+            assistantMessage.tool_calls[index] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+          }
+          const call = assistantMessage.tool_calls[index];
+          if (part.id) call.id = part.id;
+          if (part.function && part.function.name) call.function.name += part.function.name;
+          if (part.function && part.function.arguments) call.function.arguments += part.function.arguments;
+        }
+      }
+
       if (delta && typeof delta.content === 'string') {
         assistantMessage.content += delta.content;
       } else if (delta && Array.isArray(delta.content)) {
         for (const item of delta.content) {
-          if (item && item.type === 'text' && item.text) {
-            assistantMessage.content += item.text;
-          }
+          if (item && item.type === 'text' && item.text) assistantMessage.content += item.text;
         }
       }
     } catch (_) {
@@ -458,7 +470,6 @@ function parseSSEChunk(text, assistantMessage) {
 
 async function sendMessage(event) {
   if (event) event.preventDefault();
-
   const input = $('prompt');
   const content = input.value.trim();
   if (!content || state.controller) return;
@@ -468,23 +479,18 @@ async function sendMessage(event) {
     openSettings();
     return;
   }
-
   if (!currentChat()) createChat();
 
   const chat = currentChat();
   chat.messages.push({ role: 'user', content });
-  chat.title = chat.messages.filter(message => message.role === 'user').length === 1
-    ? content.slice(0, 36)
-    : chat.title;
+  chat.title = chat.messages.filter(message => message.role === 'user').length === 1 ? content.slice(0, 36) : chat.title;
   chat.updatedAt = Date.now();
   chat.thinking = state.thinking;
-
   input.value = '';
   input.style.height = 'auto';
 
-  const assistant = { role: 'assistant', content: '' };
+  let assistant = { role: 'assistant', content: '', reasoning: '' };
   chat.messages.push(assistant);
-
   renderHistory();
   renderMessages();
   saveHistory();
@@ -494,65 +500,112 @@ async function sendMessage(event) {
   $('stop').hidden = false;
   input.disabled = true;
 
-  const payload = {
-    model: $('modelSelect').value || state.config.model,
-    messages: chat.messages
-      .filter(message => message.content !== '' || message.role !== 'assistant')
-      .map(message => ({ role: message.role, content: message.content })),
-    stream: true
-  };
-
-  if (state.thinking) {
-    payload.reasoning_effort = 'high';
-  }
-
   try {
-    const response = await fetch('/v1/chat/completions', {
-      method: 'POST',
-      headers: requestHeaders({ 'Content-Type': 'application/json' }),
-      signal: state.controller.signal,
-      body: JSON.stringify(payload)
-    });
+    let mcpTools = [];
+    try { mcpTools = await api('/api/mcp/tools'); }
+    catch (error) { showToast('读取 MCP 工具失败：' + error.message, 'warning'); }
+    const toolLookup = new Map(mcpTools.map(tool => [tool.function.name, tool]));
+    let round = 0;
+    let continueTools = true;
 
-    if (!response.ok) {
-      const text = await response.text();
-      let message = text;
+    while (continueTools && round < 5) {
+      round++;
+      const maxTurns = Number(state.config.contextWindow) || 20;
+      const allMessages = chat.messages.filter(message =>
+        message.role === 'user' || message.role === 'tool' ||
+        (message.role === 'assistant' && (message.content || message.tool_calls))
+      );
+      const userIndices = [];
+      allMessages.forEach((message, index) => { if (message.role === 'user') userIndices.push(index); });
+      const startIndex = userIndices.length > maxTurns ? userIndices[userIndices.length - maxTurns] : 0;
+      const contextMessages = allMessages.slice(startIndex).map(message => {
+        if (message.role === 'assistant' && message.tool_calls) {
+          return { role: 'assistant', content: message.content || null, tool_calls: message.tool_calls };
+        }
+        if (message.role === 'tool') {
+          return { role: 'tool', tool_call_id: message.tool_call_id, content: message.content || '' };
+        }
+        return { role: message.role, content: message.content || '' };
+      });
 
-      try {
-        const data = JSON.parse(text);
-        message = data.error && data.error.message ? data.error.message : text;
-      } catch (_) {}
+      const payload = {
+        model: $('modelSelect').value || state.config.model,
+        messages: contextMessages,
+        stream: true,
+        temperature: Number(state.config.temperature ?? 0.7),
+        top_p: Number(state.config.topP ?? 1),
+        max_tokens: Number(state.config.maxTokens ?? 4096)
+      };
+      if (state.thinking) payload.reasoning_effort = 'high';
+      if (mcpTools.length) payload.tools = mcpTools.map(tool => ({ type: 'function', function: tool.function }));
+      const response = await fetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: requestHeaders({ 'Content-Type': 'application/json' }),
+        signal: state.controller.signal,
+        body: JSON.stringify(payload)
+      });
 
-      throw new Error(message || ('HTTP ' + response.status));
-    }
-
-    if (!response.body) {
-      throw new Error('浏览器没有提供流式响应读取接口。');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let pending = '';
-
-    while (true) {
-      const result = await reader.read();
-      if (result.done) break;
-
-      pending += decoder.decode(result.value, { stream: true });
-      const events = pending.split(/\r?\n\r?\n/);
-      pending = events.pop();
-
-      for (const eventText of events) {
-        parseSSEChunk(eventText, assistant);
+      if (!response.ok) {
+        const text = await response.text();
+        let message = text;
+        try { const data = JSON.parse(text); message = data.error && data.error.message ? data.error.message : text; } catch (_) {}
+        throw new Error(message || ('HTTP ' + response.status));
       }
+      if (!response.body) throw new Error('浏览器没有提供流式响应读取接口。');
 
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = '';
+      while (true) {
+        const result = await reader.read();
+        if (result.done) break;
+        pending += decoder.decode(result.value, { stream: true });
+        const events = pending.split(/\r?\n\r?\n/);
+        pending = events.pop();
+        for (const eventText of events) parseSSEChunk(eventText, assistant);
+        renderMessages();
+      }
+      pending += decoder.decode();
+      if (pending.trim()) parseSSEChunk(pending, assistant);
+
+      const toolCalls = (assistant.tool_calls || []).filter(call => call && call.function && call.function.name);
+      if (!toolCalls.length) {
+        continueTools = false;
+        break;
+      }
+      assistant.tool_calls = toolCalls;
+      assistant.content = assistant.content || '';
       renderMessages();
+      for (const call of toolCalls) {
+        const registered = toolLookup.get(call.function.name);
+        if (!registered) throw new Error('模型请求了未注册的 MCP 工具：' + call.function.name);
+        const description = registered.serverName + ' / ' + registered.originalName;
+        if (registered && (registered.approval !== 'auto') && !window.confirm('允许调用 MCP 工具？\n' + description + '\n参数：\n' + call.function.arguments)) {
+          chat.messages.push({ role: 'tool', tool_call_id: call.id, content: '用户拒绝了该工具调用。' });
+          continue;
+        }
+        showToast('正在调用 MCP 工具：' + description, 'info');
+        let args;
+        try { args = JSON.parse(call.function.arguments || '{}'); }
+        catch (_) { throw new Error('MCP 工具参数不是有效 JSON：' + call.function.name); }
+        const result = await api('/api/mcp/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: call.function.name, arguments: args })
+        });
+        chat.messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(result.result)
+        });
+      }
+      assistant = { role: 'assistant', content: '', reasoning: '' };
+      chat.messages.push(assistant);
+      saveHistory();
     }
-
-    pending += decoder.decode();
-    if (pending.trim()) parseSSEChunk(pending, assistant);
-
-    if (!assistant.content) {
+    if (round >= 5 && (assistant.tool_calls || []).length) {
+      assistant.content = '工具调用轮数已达到上限，请继续提问或减少工具链长度。';
+    } else if (!assistant.content && !assistant.reasoning) {
       assistant.content = '（服务已响应，但没有返回可显示的文本内容。）';
     }
   } catch (error) {
@@ -560,6 +613,7 @@ async function sendMessage(event) {
       if (!assistant.content) assistant.content = '已停止生成。';
     } else {
       assistant.content = '请求失败：' + error.message;
+      showToast(error.message, 'warning');
     }
   } finally {
     state.controller = null;
@@ -567,7 +621,6 @@ async function sendMessage(event) {
     $('stop').hidden = true;
     input.disabled = false;
     input.focus();
-
     chat.updatedAt = Date.now();
     saveHistory();
     renderHistory();
