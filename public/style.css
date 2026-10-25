@@ -1954,3 +1954,8 @@ html body .chat-scroll > .welcome-modern .setup-foot {
   #mcpManager .mcp-editor { padding: 14px; }
   #mcpManager #mcpServerList .plugin-card { padding: 13px; }
 }
+
+
+/* WebSocket transport option should remain readable in the MCP editor. */
+#mcpManager #mcpType option[value="websocket"] { font-weight: 600; }
+#mcpManager #mcpUrl[placeholder*="wss://"] { font-family: var(--mono); }
