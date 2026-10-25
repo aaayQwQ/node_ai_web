@@ -317,6 +317,17 @@ function renderMessages() {
       bubble.className = 'bubble';
       bubble.textContent = message.content || '';
       row.appendChild(bubble);
+    } else if (message.role === 'tool') {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble tool-result-bubble';
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'MCP 工具执行结果';
+      const pre = document.createElement('pre');
+      pre.textContent = message.content || '';
+      details.append(summary, pre);
+      bubble.appendChild(details);
+      row.appendChild(bubble);
     } else {
       const avatar = document.createElement('div');
       avatar.className = 'avatar';
@@ -603,7 +614,7 @@ async function sendMessage(event) {
       chat.messages.push(assistant);
       saveHistory();
     }
-    if (round >= 5 && (assistant.tool_calls || []).length) {
+    if (round >= 5 && continueTools) {
       assistant.content = '工具调用轮数已达到上限，请继续提问或减少工具链长度。';
     } else if (!assistant.content && !assistant.reasoning) {
       assistant.content = '（服务已响应，但没有返回可显示的文本内容。）';
