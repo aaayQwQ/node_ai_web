@@ -913,18 +913,36 @@ async function refreshMCPServers() {
       const title = document.createElement('strong');
       title.textContent = server.name;
       const status = document.createElement('p');
+      status.className = 'mcp-server-status';
       status.textContent = server.type.toUpperCase() + ' · ' + (server.enabled ? '已启用' : '已停用')
         + ' · ' + (server.approval === 'auto' ? '自动调用' : '调用前确认');
+      const toolSummary = document.createElement('small');
+      toolSummary.className = 'mcp-tool-summary';
+      toolSummary.textContent = '工具列表尚未刷新';
       const edit = document.createElement('button');
       edit.type = 'button'; edit.textContent = '编辑';
       edit.addEventListener('click', () => editMCPServer(server));
       const discover = document.createElement('button');
-      discover.type = 'button'; discover.textContent = '发现工具';
+      discover.type = 'button'; discover.textContent = '测试 / 刷新工具';
       discover.addEventListener('click', async () => {
         try {
+          discover.disabled = true;
+          discover.textContent = '检查中…';
           const result = await api('/api/mcp/servers/' + encodeURIComponent(server.id) + '/discover', { method: 'POST' });
-          showToast('发现 ' + result.tools.length + ' 个工具', 'success');
-        } catch (error) { showToast(error.message, 'warning'); }
+          const tools = Array.isArray(result.tools) ? result.tools : [];
+          toolSummary.textContent = tools.length
+            ? '工具（' + tools.length + '）：' + tools.map(tool => tool.name || '未命名工具').join('、')
+            : '连接成功，但服务器未公布工具';
+          status.textContent = server.type.toUpperCase() + ' · 连接正常 · ' + (server.enabled ? '已启用' : '已停用');
+          showToast('连接成功，发现 ' + tools.length + ' 个工具', 'success');
+        } catch (error) {
+          toolSummary.textContent = '连接失败：' + error.message;
+          status.textContent = server.type.toUpperCase() + ' · 连接失败';
+          showToast(error.message, 'warning');
+        } finally {
+          discover.disabled = false;
+          discover.textContent = '测试 / 刷新工具';
+        }
       });
       const remove = document.createElement('button');
       remove.type = 'button'; remove.textContent = '删除';
@@ -936,7 +954,7 @@ async function refreshMCPServers() {
           showToast('MCP 服务已删除', 'success');
         } catch (error) { showToast(error.message, 'warning'); }
       });
-      card.append(title, status, edit, discover, remove);
+      card.append(title, status, toolSummary, document.createElement('br'), edit, discover, remove);
       list.appendChild(card);
     }
   } catch (error) {
