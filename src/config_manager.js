@@ -18,7 +18,10 @@ module.exports = function createConfigManager(root) {
     next.topP = Number.isFinite(Number(next.topP)) ? Math.min(1, Math.max(0, Number(next.topP))) : 1;
     next.maxTokens = Math.max(1, Math.min(200000, Number(next.maxTokens) || 4096));
     next.contextWindow = Math.max(1, Math.min(100, Number(next.contextWindow) || 20));
-    next.customHeaders = next.customHeaders && typeof next.customHeaders === 'object' && !Array.isArray(next.customHeaders)\n      ? Object.fromEntries(Object.entries(next.customHeaders).filter(([key, value]) =>\n        /^[A-Za-z0-9-]{1,80}$/.test(key) && typeof value === 'string' && value.length <= 4000 && !/[\\r\\n]/.test(value)))\n      : {};
+    next.customHeaders = next.customHeaders && typeof next.customHeaders === 'object' && !Array.isArray(next.customHeaders)
+      ? Object.fromEntries(Object.entries(next.customHeaders).filter(([key, value]) =>
+        /^[A-Za-z0-9-]{1,80}$/.test(key) && typeof value === 'string' && value.length <= 4000 && !/[\r\n]/.test(value)))
+      : {};
     next.temperature = Number.isFinite(Number(next.temperature))
       ? Math.min(2, Math.max(0, Number(next.temperature)))
       : 0.7;
