@@ -1821,3 +1821,78 @@ body.light .history-list button { color: #687386; }
   .modal-header-actions { flex-wrap: wrap; }
 }
 
+/* Actual welcome-screen fix: a later shared .welcome rule was overriding
+   .welcome-modern's horizontal padding with zero, leaving content flush
+   against the card border. Keep the onboarding card's own padding last. */
+html body .chat-scroll > .welcome-modern {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: min(100%, 790px);
+  min-width: 0;
+  min-height: min(560px, 68vh);
+  margin: 0 auto;
+  padding: clamp(24px, 4vw, 48px);
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  overflow-wrap: anywhere;
+}
+html body .chat-scroll > .welcome-modern .welcome-brand {
+  margin: 0 0 30px;
+  line-height: 1.5;
+}
+html body .chat-scroll > .welcome-modern h1 {
+  max-width: 100%;
+  margin: 0 0 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+html body .chat-scroll > .welcome-modern .welcome-description {
+  max-width: 100%;
+  margin: 0 0 24px;
+  line-height: 1.8;
+}
+html body .chat-scroll > .welcome-modern .setup-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+  gap: 12px;
+}
+html body .chat-scroll > .welcome-modern .setup-card-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+html body .chat-scroll > .welcome-modern .setup-cta {
+  flex: 0 0 auto;
+  max-width: 100%;
+  white-space: normal;
+}
+html body .chat-scroll > .welcome-modern .setup-foot {
+  flex-wrap: wrap;
+  line-height: 1.6;
+}
+@media (max-width: 700px) {
+  html body .chat-scroll > .welcome-modern {
+    min-height: 0;
+    padding: 24px 18px;
+    border-radius: 16px;
+  }
+  html body .chat-scroll > .welcome-modern .welcome-brand {
+    margin-bottom: 24px;
+  }
+  html body .chat-scroll > .welcome-modern .setup-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 14px;
+  }
+  html body .chat-scroll > .welcome-modern .setup-card-copy {
+    flex: 1 1 calc(100% - 60px);
+  }
+  html body .chat-scroll > .welcome-modern .setup-cta {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
