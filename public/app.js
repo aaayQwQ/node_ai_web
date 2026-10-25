@@ -403,6 +403,12 @@ function renderMessages() {
     || state.config.model
     || '默认模型';
   updateThinkingButton();
+  if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+    try {
+      window.MathJax.typesetClear([container]);
+      window.MathJax.typesetPromise([container]).catch(() => {});
+    } catch (_) {}
+  }
 }
 
 function setConnectionStatus(message, status) {
