@@ -9,11 +9,13 @@ const createConfigManager = require('./config_manager');
 const createLogger = require('./logger');
 const createPluginEngine = require('./plugin_engine');
 const proxy = require('./proxy');
+const createMCPManager = require('./mcp_client');
 
 function start(root) {
   const config = createConfigManager(root);
   const log = createLogger(root);
   const plugins = createPluginEngine(root, config, log);
+  const mcp = createMCPManager(root, log);
   const requestCounts = new Map();
   const historyFile = path.join(root, 'config', 'history.json');
 
@@ -160,6 +162,10 @@ function start(root) {
         'systemPrompt',
         'webPassword',
         'temperature',
+        'topP',
+        'maxTokens',
+        'contextWindow',
+        'customHeaders',
         'enabledPlugins'
       ];
       const filtered = {};
@@ -198,6 +204,60 @@ function start(root) {
 
       fs.writeFileSync(historyFile, JSON.stringify(history, null, 2) + '\n');
       sendJSON(response, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname === '/api/mcp/servers' && request.method === 'GET') {
+      sendJSON(response, 200, mcp.list());
+      return true;
+    }
+
+    if (pathname === '/api/mcp/servers' && request.method === 'POST') {
+      const body = await readJSON(request);
+      try {
+        const saved = mcp.save(body);
+        sendJSON(response, 200, { ok: true, server: saved });
+      } catch (error) {
+        sendJSON(response, 400, { error: { message: error.message } });
+      }
+      return true;
+    }
+
+    const mcpServerMatch = pathname.match(/^\/api\/mcp\/servers\/([a-zA-Z0-9_-]+)$/);
+    if (mcpServerMatch && request.method === 'DELETE') {
+      try { sendJSON(response, 200, mcp.remove(mcpServerMatch[1])); }
+      catch (error) { sendJSON(response, 404, { error: { message: error.message } }); }
+      return true;
+    }
+
+    const mcpDiscoverMatch = pathname.match(/^\/api\/mcp\/servers\/([a-zA-Z0-9_-]+)\/discover$/);
+    if (mcpDiscoverMatch && request.method === 'POST') {
+      try {
+        const tools = await mcp.discover(mcpDiscoverMatch[1]);
+        sendJSON(response, 200, { ok: true, tools });
+      } catch (error) {
+        sendJSON(response, 502, { error: { message: error.message } });
+      }
+      return true;
+    }
+
+    if (pathname === '/api/mcp/tools' && request.method === 'GET') {
+      sendJSON(response, 200, await mcp.listTools());
+      return true;
+    }
+
+    if (pathname === '/api/mcp/call' && request.method === 'POST') {
+      const body = await readJSON(request);
+      try {
+        const serverId = String(body.name || '').split('__')[0];
+        const serverInfo = mcp.get(serverId);
+        if (!serverInfo || !serverInfo.enabled) throw new Error('MCP 服务不存在或已停用。');
+        const result = await mcp.callTool(body.name, body.arguments || {});
+        log('INFO', 'MCP 工具已执行：' + serverInfo.name + '/' + String(body.name).slice(serverId.length + 2));
+        sendJSON(response, 200, { ok: true, result });
+      } catch (error) {
+        sendJSON(response, 400, { error: { message: error.message } });
+      }
       return true;
     }
 
