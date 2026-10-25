@@ -81,6 +81,18 @@ module.exports = function createMCPManager(root, log) {
     const index = input && input.id ? servers.findIndex(item => item.id === input.id) : -1;
     const existing = index >= 0 ? servers[index] : null;
     const value = normalize(input, existing);
+    if (existing) {
+      for (const [key, headerValue] of Object.entries(value.headers || {})) {
+        if (headerValue === '••••••••' && existing.headers && Object.prototype.hasOwnProperty.call(existing.headers, key)) {
+          value.headers[key] = existing.headers[key];
+        }
+      }
+      for (const [key, envValue] of Object.entries(value.env || {})) {
+        if (envValue === '••••••••' && existing.env && Object.prototype.hasOwnProperty.call(existing.env, key)) {
+          value.env[key] = existing.env[key];
+        }
+      }
+    }
     if (servers.some(item => item.id === value.id && item !== existing)) throw new Error('MCP 服务 ID 重复。');
     if (index >= 0) servers[index] = value;
     else servers.unshift(value);
@@ -221,6 +233,7 @@ module.exports = function createMCPManager(root, log) {
     return tools.map(tool => ({
       serverId: server.id,
       serverName: server.name,
+      approval: server.approval,
       type: 'function',
       function: {
         name: server.id + '__' + String(tool.name || '').replace(/[^a-zA-Z0-9_-]/g, '_'),
