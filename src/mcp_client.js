@@ -248,10 +248,12 @@ module.exports = function createMCPManager(root, log) {
     const split = String(name || '').indexOf('__');
     if (split < 1) throw new Error('MCP 工具名称无效。');
     const serverId = name.slice(0, split);
-    const originalName = name.slice(split + 2);
     const server = get(serverId);
     if (!server || !server.enabled) throw new Error('MCP 服务不存在或已停用。');
-    const result = await rpc(server, 'tools/call', { name: originalName, arguments: args || {} });
+    const registered = await discover(serverId);
+    const selected = registered.find(tool => tool.function.name === name);
+    if (!selected) throw new Error('找不到该 MCP 工具；请刷新工具列表后重试。');
+    const result = await rpc(server, 'tools/call', { name: selected.originalName, arguments: args || {} });
     return result;
   }
 
