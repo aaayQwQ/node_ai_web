@@ -137,6 +137,23 @@ function renderMarkdown(value) {
   return blocks.join('');
 }
 
+function openSettings() {
+  $('settingsResult').textContent = '';
+  $('settings').showModal();
+  const key = $('apiKey');
+  if (key && !state.config.apiKeySet) key.focus();
+}
+
+let toastTimer;
+function showToast(message, type = 'info') {
+  const toast = $('toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = 'toast visible ' + type;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 3600);
+}
+
 function currentChat() {
   return state.chats.find(chat => chat.id === state.activeChatId) || null;
 }
@@ -208,14 +225,24 @@ function renderMessages() {
   const chat = currentChat();
   if (!chat || chat.messages.length === 0) {
     const welcome = document.createElement('div');
-    welcome.className = 'welcome';
-    welcome.innerHTML = '<div class="welcome-meta"><span>NODE AI WEB</span><span>LOCAL / OPEN API</span></div>'
-      + '<div class="welcome-index">01<span>.</span></div>'
-      + '<div class="welcome-copy"><p class="eyebrow">一个干净的开始</p>'
-      + '<h1>从这里，<br>开始对话<span class="accent-dot">。</span></h1>'
-      + '<p class="welcome-description">你的模型，你的密钥，你的工作区。<br>没有多余的东西。</p></div>'
-      + '<div class="welcome-foot"><span>OPENAI-COMPATIBLE</span><span>SCROLL TO EXPLORE ↓</span></div>';
+    const configured = Boolean(state.config.baseURL && state.config.apiKeySet);
+    welcome.className = 'welcome welcome-modern' + (configured ? '' : ' needs-config');
+    welcome.innerHTML = '<div class="welcome-brand"><span class="welcome-logo">N<span>✳</span></span><span>NODE AI <small>YOUR MODEL. YOUR RULES.</small></span></div>'
+      + '<div class="welcome-kicker">' + (configured ? 'READY WHEN YOU ARE' : 'FIRST-TIME SETUP / 01') + '</div>'
+      + '<h1>' + (configured ? '有什么新想法？' : '先连接你的模型，<br>再开始对话。') + '</h1>'
+      + '<p class="welcome-description">' + (configured ? '写代码、整理思路、探索问题。让对话从这里开始。' : '这是你的私人 AI 工作区。配置兼容 OpenAI 的 API 地址与密钥，即可开始使用。密钥由本地服务保存。') + '</p>'
+      + (configured
+        ? '<div class="welcome-suggestions"><button type="button" data-prompt="帮我解释一段代码">解释一段代码 <span>↗</span></button><button type="button" data-prompt="帮我整理一个想法">整理一个想法 <span>↗</span></button><button type="button" data-prompt="用清晰的步骤解决一个问题">拆解一个问题 <span>↗</span></button></div>'
+        : '<div class="setup-card"><div class="setup-card-icon">⌘</div><div class="setup-card-copy"><strong>连接你的 API</strong><span>Base URL · API Key · 默认模型</span></div><button type="button" class="setup-cta" id="welcomeSetupBtn">去配置 API Key <span>→</span></button></div><div class="setup-foot"><span>支持 OpenAI 兼容接口</span><span>DeepSeek · OpenAI · OpenRouter · 自定义</span></div>')
+      + '<div class="welcome-bottomline"><span>NODE AI WEB</span><span>LOCAL-FIRST / OPENAI-COMPATIBLE</span></div>';
     container.appendChild(welcome);
+    welcome.querySelectorAll('[data-prompt]').forEach(button => button.addEventListener('click', () => {
+      $('prompt').value = button.dataset.prompt;
+      $('prompt').dispatchEvent(new Event('input', { bubbles: true }));
+      $('prompt').focus();
+    }));
+    const setupButton = $('welcomeSetupBtn');
+    if (setupButton) setupButton.addEventListener('click', openSettings);
     $('modelSelect').title = state.config.model || '默认模型';
     return;
   }
@@ -236,7 +263,9 @@ function renderMessages() {
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      bubble.innerHTML = renderMarkdown(message.content || '');
+      bubble.innerHTML = (message.reasoning
+        ? '<details class="thinking-panel"><summary><span class="thinking-pulse"></span>已深度思考 <span class="thinking-panel-note">展开查看</span></summary><div class="thinking-content">' + renderMarkdown(message.reasoning) + '</div></details>'
+        : '') + renderMarkdown(message.content || (state.controller ? '正在思考…' : ''));
 
       row.append(avatar, bubble);
     }
@@ -287,7 +316,11 @@ async function loadSettings() {
     $('temperature').value = state.config.temperature ?? 0.7;
     $('webPassword').value = '';
     $('webPassword').placeholder = '留空则保留当前密码';
-    setConnectionStatus('已连接本地服务', 'online');
+    setConnectionStatus('本地服务已就绪', 'online');
+    const ready = Boolean(state.config.baseURL && state.config.apiKeySet);
+    document.body.classList.toggle('needs-api-config', !ready);
+    if (!ready) setConnectionStatus('需要配置 API', 'offline');
+    renderMessages();
   } catch (error) {
     setConnectionStatus('本地服务连接失败', 'offline');
     console.error(error);
@@ -337,6 +370,12 @@ function parseSSEChunk(text, assistantMessage) {
       const choice = event.choices && event.choices[0];
       const delta = choice && choice.delta;
 
+      if (delta && typeof delta.reasoning_content === 'string') {
+        assistantMessage.reasoning = (assistantMessage.reasoning || '') + delta.reasoning_content;
+      } else if (delta && typeof delta.reasoning === 'string') {
+        assistantMessage.reasoning = (assistantMessage.reasoning || '') + delta.reasoning;
+      }
+
       if (delta && typeof delta.content === 'string') {
         assistantMessage.content += delta.content;
       } else if (delta && Array.isArray(delta.content)) {
@@ -358,6 +397,12 @@ async function sendMessage(event) {
   const input = $('prompt');
   const content = input.value.trim();
   if (!content || state.controller) return;
+
+  if (!state.config.baseURL || !state.config.apiKeySet) {
+    showToast('请先配置 Base URL 和 API Key，再发送消息。', 'warning');
+    openSettings();
+    return;
+  }
 
   if (!currentChat()) createChat();
 
@@ -494,6 +539,14 @@ async function saveSettings() {
     await loadSettings();
     await loadModels();
     $('settingsResult').textContent = '设置已保存。';
+    const ready = Boolean(state.config.baseURL && state.config.apiKeySet);
+    if (ready) {
+      showToast('连接配置已保存，可以开始对话。', 'success');
+      $('settings').close();
+    } else {
+      showToast('已保存；请确认 Base URL 和 API Key 均已填写。', 'warning');
+    }
+    renderMessages();
   } catch (error) {
     $('settingsResult').textContent = '保存失败：' + error.message;
   }
@@ -607,14 +660,8 @@ $('prompt').addEventListener('input', event => {
   event.target.style.height = Math.min(event.target.scrollHeight, 200) + 'px';
 });
 
-$('settingsBtn').addEventListener('click', () => {
-  $('settingsResult').textContent = '';
-  $('settings').showModal();
-});
-$('profileBtn').addEventListener('click', () => {
-  $('settingsResult').textContent = '';
-  $('settings').showModal();
-});
+$('settingsBtn').addEventListener('click', openSettings);
+$('profileBtn').addEventListener('click', openSettings);
 $('pluginsBtn').addEventListener('click', openPlugins);
 $('statusBtn').addEventListener('click', async () => {
   try {
@@ -653,7 +700,23 @@ $('thinkingBtn').addEventListener('click', () => {
   saveHistory();
 });
 $('attachBtn').addEventListener('click', () => {
-  window.alert('当前版本暂不支持上传附件。');
+  showToast('附件上传暂未接入；此按钮目前保留为工具入口。', 'info');
+});
+$('providerPreset').addEventListener('change', () => {
+  const presets = {
+    custom: { url: '', model: '' },
+    openai: { url: 'https://api.openai.com/v1', model: 'gpt-4.1-mini' },
+    deepseek: { url: 'https://api.deepseek.com', model: 'deepseek-chat' },
+    anthropic: { url: 'https://api.anthropic.com/v1', model: 'claude-3-5-sonnet-latest' },
+    openrouter: { url: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
+    siliconflow: { url: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-V3' },
+    ollama: { url: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' }
+  };
+  const preset = presets[$('providerPreset').value];
+  if (!preset) return;
+  if (preset.url) $('baseURL').value = preset.url;
+  if (preset.model) $('model').value = preset.model;
+  showToast('已填入预设地址和模型；请检查后保存。', 'info');
 });
 $('saveSettings').addEventListener('click', saveSettings);
 $('testConnection').addEventListener('click', testConnection);
@@ -665,10 +728,10 @@ document.querySelectorAll('.close-modal').forEach(button => {
   button.addEventListener('click', () => button.closest('dialog').close());
 });
 
-if (localStorage.getItem('node-ai-web-theme') === 'dark') {
-  document.body.classList.remove('light');
-} else {
+if (localStorage.getItem('node-ai-web-theme') === 'light') {
   document.body.classList.add('light');
+} else {
+  document.body.classList.remove('light');
 }
 
 (async function initialize() {
