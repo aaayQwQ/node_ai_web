@@ -212,8 +212,110 @@ module.exports = function createMCPManager(root, log) {
     });
   }
 
+  function sseRPC(server, method, params) {
+    return new Promise((resolve, reject) => {
+      const sourceURL = new URL(server.url);
+      const transport = sourceURL.protocol === 'https:' ? https : http;
+      const pending = new Map();
+      let endpoint = null;
+      let buffer = '';
+      let eventName = '';
+      let dataLines = [];
+      let finished = false;
+      let initStarted = false;
+      const timeout = setTimeout(() => finish(new Error('MCP SSE 请求超时。')), server.timeout || TIMEOUT_MS);
+
+      function finish(error, result) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timeout);
+        try { getReq.destroy(); } catch (_) {}
+        if (error) reject(error); else resolve(result);
+      }
+
+      function handleMessage(message) {
+        if (!message || message.jsonrpc !== '2.0') return;
+        if (!pending.has(message.id)) return;
+        const waiter = pending.get(message.id);
+        pending.delete(message.id);
+        if (message.error) waiter.reject(new Error(message.error.message || 'MCP JSON-RPC 错误。'));
+        else waiter.resolve(message.result || {});
+      }
+
+      function post(methodName, requestParams, id) {
+        return new Promise((res, rej) => {
+          pending.set(id, { resolve: res, reject: rej });
+          const payload = JSON.stringify({ jsonrpc: '2.0', id, method: methodName, params: requestParams || {} });
+          requestHTTP(endpoint, server.headers, payload, server.timeout).then(response => {
+            if (response && response.jsonrpc === '2.0') handleMessage(response);
+            else if (response && response.result !== undefined && pending.has(id)) handleMessage({ jsonrpc: '2.0', id, result: response.result });
+            // A 202 / empty body means the response will arrive on the SSE stream.
+          }).catch(error => {
+            if (pending.has(id)) {
+              pending.delete(id);
+              rej(error);
+            }
+          });
+        });
+      }
+
+      async function initializeAndCall() {
+        if (initStarted || !endpoint) return;
+        initStarted = true;
+        try {
+          await post('initialize', {
+            protocolVersion: PROTOCOL_VERSION,
+            capabilities: {},
+            clientInfo: { name: 'Node AI Web', version: '1.0.0' }
+          }, 1);
+          const notification = JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' });
+          await requestHTTP(endpoint, server.headers, notification, server.timeout).catch(() => ({}));
+          const result = await post(method, params, 2);
+          finish(null, result);
+        } catch (error) {
+          finish(error);
+        }
+      }
+
+      const getReq = transport.request(sourceURL, {
+        method: 'GET',
+        headers: Object.assign({}, server.headers || {}, { Accept: 'text/event-stream', 'Cache-Control': 'no-cache' })
+      }, response => {
+        if ((response.statusCode || 500) < 200 || (response.statusCode || 500) >= 300) {
+          finish(new Error('MCP SSE HTTP ' + response.statusCode));
+          return;
+        }
+        response.on('data', chunk => {
+          buffer += chunk.toString('utf8');
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line) {
+              const data = dataLines.join('\n');
+              if (eventName === 'endpoint' && data) {
+                try { endpoint = new URL(data, sourceURL).href; } catch (_) {}
+                initializeAndCall();
+              } else if (data) {
+                try { handleMessage(JSON.parse(data)); } catch (_) {}
+              }
+              eventName = '';
+              dataLines = [];
+            } else if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+          }
+        });
+        response.on('error', error => finish(error));
+        response.on('end', () => { if (!finished) finish(new Error('MCP SSE 连接提前关闭。')); });
+      });
+      getReq.setTimeout(server.timeout || TIMEOUT_MS, () => getReq.destroy(new Error('MCP SSE 连接超时。')));
+      getReq.on('error', error => finish(error));
+      getReq.end();
+    });
+  }
+
   async function rpc(server, method, params) {
     if (server.type === 'stdio') return stdioCall(server, method, params);
+    if (server.type === 'sse') return sseRPC(server, method, params);
     const headers = Object.assign({}, server.headers || {});
     const body = JSON.stringify({
       jsonrpc: '2.0', id: ++nextId, method, params: params || {}
