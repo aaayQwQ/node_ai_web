@@ -1654,3 +1654,111 @@ body.light .history-list button { color: #687386; }
   .composer { border-radius: 15px; }
   .message.user .bubble { max-width: 92%; }
 }
+
+
+/* Alignment and multi-provider manager refinement (2026-10-25). */
+.app-main { background-image: none !important; }
+.topbar, .topbar-left, .topbar-right { min-width: 0; }
+.breadcrumb, .model-menu, .connection-label { line-height: 1.4; }
+.model-menu { max-width: min(46vw, 460px); overflow: hidden; text-overflow: ellipsis; }
+.modal {
+  width: min(760px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(88vh, 900px);
+  overflow: auto;
+  padding: 0;
+}
+.modal > form { display: block; width: 100%; min-width: 0; padding: 24px; }
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin: -24px -24px 22px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.modal-header > div:first-child { flex: 1; min-width: 0; }
+.modal-header h2 { margin: 0 0 6px; line-height: 1.25; }
+.modal-header p { margin: 0; max-width: 62ch; line-height: 1.55; overflow-wrap: anywhere; }
+.modal-header-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; }
+.modal-header-actions button { white-space: nowrap; }
+.modal label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 16px;
+  line-height: 1.45;
+}
+.modal label > input:not([type="checkbox"]),
+.modal label > textarea,
+.modal label > select,
+.modal .input-with-action { width: 100%; min-width: 0; max-width: 100%; }
+.modal input, .modal textarea, .modal select { min-height: 42px; padding: 10px 12px; line-height: 1.45; }
+.modal textarea { resize: vertical; }
+.modal label small { display: block; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.modal .form-grid { align-items: start; gap: 16px; }
+.modal .form-grid label { margin: 0; }
+.modal .modal-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.modal .modal-actions button { min-height: 40px; padding: 9px 14px; }
+.modal .inline-check { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; }
+.modal .inline-check input[type="checkbox"] { width: 17px; height: 17px; min-height: 0; margin: 0; }
+#mcpManager { width: min(820px, calc(100vw - 32px)); }
+#mcpManagerForm { padding-bottom: 26px; }
+#mcpManager .mcp-modal-header { position: sticky; top: -24px; z-index: 3; background: var(--panel); }
+#mcpManager .mcp-editor { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line); }
+#mcpManager .mcp-editor h3 { margin: 0 0 18px; }
+#mcpServerList { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 12px; }
+#mcpServerList .plugin-card {
+  min-width: 0; margin: 0; padding: 15px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--paper-2); overflow-wrap: anywhere;
+}
+#mcpServerList .plugin-card > strong { display: block; margin-bottom: 8px; line-height: 1.4; }
+#mcpServerList .plugin-card p, #mcpServerList .plugin-card small { display: block; line-height: 1.55; overflow-wrap: anywhere; }
+#mcpServerList .plugin-card button { margin: 8px 6px 0 0; }
+.mcp-tool-summary { color: var(--muted); }
+.settings-provider-tools { display: flex; justify-content: flex-start; margin: 0 0 18px; }
+#openProviders { min-height: 40px; padding: 9px 13px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--paper-2); }
+#openProviders:hover { border-color: var(--accent); color: var(--accent); }
+.provider-modal { width: min(1060px, calc(100vw - 32px)); }
+.provider-layout { display: grid; grid-template-columns: minmax(230px, .8fr) minmax(0, 1.4fr); gap: 24px; align-items: start; }
+.provider-layout h3 { margin: 0 0 14px; line-height: 1.35; }
+.provider-list-pane, .provider-editor { min-width: 0; }
+.provider-list-pane { padding-right: 18px; border-right: 1px solid var(--line); }
+.provider-card { display: grid; gap: 9px; min-width: 0; padding: 14px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper-2); }
+.provider-card strong { overflow-wrap: anywhere; }
+.provider-card small { color: var(--muted); overflow-wrap: anywhere; line-height: 1.5; }
+.provider-card button { justify-self: start; max-width: 100%; }
+.provider-empty { color: var(--muted); line-height: 1.6; }
+.provider-models-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.provider-models-section > p { color: var(--muted); line-height: 1.55; }
+.provider-models-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.provider-models-heading span { color: var(--muted); font-size: 12px; }
+.provider-model-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 7px; max-height: 280px; overflow: auto; padding: 4px 2px 12px; }
+.modal .provider-model-option {
+  display: flex; flex-direction: row; align-items: center; gap: 10px;
+  min-width: 0; margin: 0; padding: 9px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--paper-2); overflow-wrap: anywhere;
+}
+.provider-model-option input[type="checkbox"] { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); }
+.provider-model-option span { min-width: 0; overflow-wrap: anywhere; }
+#saveSelectedModels { min-height: 40px; padding: 9px 14px; border: 1px solid var(--accent); border-radius: 9px; background: var(--accent); color: white; }
+@media (max-width: 760px) {
+  .modal { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: 92vh; }
+  .modal > form { padding: 16px; }
+  .modal-header { margin: -16px -16px 18px; padding: 16px; gap: 10px; }
+  .modal-header-actions { gap: 4px; }
+  .modal-header-actions button { font-size: 12px; padding: 7px 9px; }
+  .provider-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .provider-list-pane { padding: 0 0 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .modal .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .modal .modal-actions { justify-content: stretch; }
+  .modal .modal-actions button { flex: 1 1 auto; }
+  .topbar { padding: 0 12px; gap: 8px; }
+  .topbar-left, .topbar-right { gap: 7px; }
+  .breadcrumb { gap: 5px; font-size: 11px; }
+  .model-menu { max-width: 42vw; font-size: 11px; }
+}
