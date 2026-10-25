@@ -724,3 +724,16 @@ body.sidebar-collapsed .sidebar { flex-basis: 70px; padding-right: 8px; padding-
 .markdown-table tr:last-child td { border-bottom: 0; }
 .markdown-table th:last-child, .markdown-table td:last-child { border-right: 0; }
 .bubble blockquote { margin: 14px 0; padding: 4px 0 4px 15px; border-left: 3px solid var(--accent); color: var(--muted); }
+
+/* Plain-text interface: remove decorative numbering and English taglines */
+.brand-name-plain { display: block; font-size: 13px; letter-spacing: 0; }
+.side-section-label { justify-content: flex-start; text-transform: none; letter-spacing: 0; font: 12px/1.5 var(--sans); }
+.history-heading { justify-content: flex-start; text-transform: none; letter-spacing: 0; font: 12px/1.5 var(--sans); border-bottom: 0; }
+.nav-button { gap: 8px; }
+.profile-button { padding: 12px 8px; border: 1px solid var(--line); border-radius: 10px; }
+.profile-copy small, .profile-avatar, .profile-menu { display: none; }
+.topbar-index, .welcome-logo, .welcome-kicker, .welcome-bottomline, .welcome-brand small { display: none !important; }
+.welcome-modern .welcome-brand { margin-bottom: 30px; font-size: 13px; font-weight: 650; letter-spacing: 0; }
+.welcome-modern h1 { letter-spacing: -.035em; }
+.welcome-description { letter-spacing: 0; }
+.footer-note { justify-content: center; font: 10px/1.5 var(--sans); letter-spacing: 0; }
