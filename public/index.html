@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171717">
   <meta name="description" content="A small, local-first OpenAI-compatible chat workspace.">
   <title>Node AI Web — 工作区</title>
-  <link rel="stylesheet" href="/style.css?v=20261025-mcp-token-ui-1">
+  <link rel="stylesheet" href="/style.css?v=20261025-mcp-websocket-1">
 </head>
 <body class="dark">
   <aside class="sidebar" id="sidebar">
@@ -151,8 +151,8 @@
         <h3 id="mcpEditorTitle">添加 MCP 服务</h3>
         <input id="mcpId" type="hidden">
         <label>服务名称<input id="mcpName" placeholder="例如 本地文件工具" required></label>
-        <label>服务类型<select id="mcpType"><option value="http">HTTP / Streamable HTTP</option><option value="sse">SSE（基础兼容）</option><option value="stdio">Stdio 本地进程</option></select></label>
-        <label id="mcpUrlRow">Endpoint URL<input id="mcpUrl" placeholder="http://127.0.0.1:3000/mcp"></label>
+        <label>服务类型<select id="mcpType"><option value="http">HTTP / Streamable HTTP</option><option value="sse">SSE（基础兼容）</option><option value="websocket">WebSocket（ws / wss）</option><option value="stdio">Stdio 本地进程</option></select></label>
+        <label id="mcpUrlRow">Endpoint URL<input id="mcpUrl" placeholder="http://127.0.0.1:3000/mcp 或 wss://example.com/mcp"></label>
         <label id="mcpCommandRow" hidden>Command<input id="mcpCommand" placeholder="/absolute/path/to/server"></label>
         <label id="mcpArgsRow" hidden>启动参数（JSON 数组）<textarea id="mcpArgs" rows="2" placeholder='["--port","3000"]'></textarea></label>
         <label id="mcpEnvRow" hidden>环境变量（JSON 对象）<textarea id="mcpEnv" rows="2" placeholder='{"TOKEN":"..."}'></textarea></label>
@@ -213,6 +213,6 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-  <script defer src="/app.js?v=20261025-mcp-token-ui-1"></script>
+  <script defer src="/app.js?v=20261025-mcp-websocket-1"></script>
 </body>
 </html>
