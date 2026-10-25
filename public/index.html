@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171717">
   <meta name="description" content="A small, local-first OpenAI-compatible chat workspace.">
   <title>Node AI Web — 工作区</title>
-  <link rel="stylesheet" href="/style.css?v=20261025-ui-refinement-2">
+  <link rel="stylesheet" href="/style.css?v=20261025-multi-provider-ui">
 </head>
 <body class="dark">
   <aside class="sidebar" id="sidebar">
@@ -85,6 +85,7 @@
         <div><p class="eyebrow">配置 / 01</p><h2>连接设置<span class="accent-dot">.</span></h2><p>连接兼容 OpenAI Chat Completions 的 API。</p></div>
         <button class="icon-button close-modal" aria-label="关闭">×</button>
       </div>
+      <div class="settings-provider-tools"><button type="button" id="openProviders">管理多个 OpenAI 兼容服务商与模型 →</button></div>
       <label>服务商预设
         <select id="providerPreset">
           <option value="custom">自定义 / OpenAI 兼容接口</option>
@@ -144,7 +145,7 @@
 
   <dialog class="modal" id="mcpManager">
     <form method="dialog" id="mcpManagerForm">
-      <div class="modal-header"><div><h2>MCP 服务管理</h2><p>连接自定义 MCP 工具服务器。Stdio 会在运行服务的主机上执行命令，请仅添加可信程序。</p></div><button class="icon-button close-modal" aria-label="关闭">×</button></div>
+      <div class="modal-header mcp-modal-header"><div><h2>MCP 服务管理</h2><p>连接自定义 MCP 工具服务器。Stdio 会在运行服务的主机上执行命令，请仅添加可信程序。</p></div><div class="modal-header-actions"><button type="button" id="mcpAddTop" class="primary-button">＋ 添加服务</button><button class="icon-button close-modal" aria-label="关闭">×</button></div></div>
       <div id="mcpServerList" class="plugin-list"></div>
       <div class="mcp-editor">
         <h3 id="mcpEditorTitle">添加 MCP 服务</h3>
@@ -160,6 +161,28 @@
         <label class="inline-check"><input id="mcpEnabled" type="checkbox" checked> 启用此服务</label>
         <div class="modal-actions"><button type="button" id="mcpReset">清空表单</button><button type="button" id="mcpSave" class="primary-button">保存服务</button></div>
         <p class="form-result" id="mcpResult" role="status"></p>
+      </div>
+    </form>
+  </dialog>
+
+
+  <dialog class="modal provider-modal" id="providersDialog">
+    <form method="dialog" id="providersForm">
+      <div class="modal-header"><div><p class="eyebrow">API / 多服务商</p><h2>服务商与模型</h2><p>添加多个 OpenAI 兼容接口。读取到的模型默认不加入聊天列表，只有勾选并保存的模型才会显示。</p></div><div class="modal-header-actions"><button type="button" id="providerAddTop" class="primary-button">＋ 添加服务商</button><button class="icon-button close-modal" aria-label="关闭">×</button></div></div>
+      <div class="provider-layout">
+        <section class="provider-list-pane"><h3>已配置的服务商</h3><div id="providerList" class="plugin-list"></div></section>
+        <section class="provider-editor">
+          <h3 id="providerEditorTitle">添加服务商</h3>
+          <input id="providerId" type="hidden">
+          <label>自定义名称<input id="providerName" placeholder="例如 OpenRouter / 我的代理" required></label>
+          <label>Base URL<input id="providerBaseURL" placeholder="https://api.example.com/v1" required spellcheck="false"></label>
+          <label>API Key<input id="providerApiKey" type="password" autocomplete="new-password" placeholder="留空则保留已保存的密钥"></label>
+          <label>默认模型 ID（可选）<input id="providerDefaultModel" placeholder="例如 gpt-4.1-mini"></label>
+          <label>自定义请求头（JSON）<textarea id="providerHeaders" rows="3" placeholder="{}"></textarea></label>
+          <div class="modal-actions"><button type="button" id="providerReset">清空</button><button type="button" id="providerTest">读取模型</button><button type="button" id="providerSave" class="primary-button">保存服务商</button></div>
+          <p id="providerResult" class="form-result" role="status"></p>
+          <div class="provider-models-section"><div class="provider-models-heading"><h3>可用模型</h3><span id="providerModelCount">尚未读取</span></div><p>勾选要加入聊天模型选择器的模型，然后保存选择。</p><div id="providerModels" class="provider-model-list"></div><button type="button" id="saveSelectedModels">保存勾选的模型</button></div>
+        </section>
       </div>
     </form>
   </dialog>
@@ -189,6 +212,6 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-  <script defer src="/app.js?v=20261025-ui-refinement-2"></script>
+  <script defer src="/app.js?v=20261025-multi-provider-ui"></script>
 </body>
 </html>
