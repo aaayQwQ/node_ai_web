@@ -468,10 +468,20 @@ async function loadModels() {
 }
 
 function updateThinkingButton() {
+  const button = $('thinkingBtn');
+  if (!button) return;
   const enabled = Boolean(state.thinking);
-  $('thinkingBtn').classList.toggle('thinking-active', enabled);
-  $('thinkingBtn').title = enabled ? '深度思考已开启' : '开启深度思考';
-  $('thinkingBtn').setAttribute('aria-pressed', String(enabled));
+  button.classList.toggle('thinking-active', enabled);
+  button.dataset.enabled = String(enabled);
+  button.title = enabled
+    ? '深度思考已开启；是否实际执行取决于当前模型和服务商'
+    : '开启深度思考模式';
+  button.setAttribute('aria-pressed', String(enabled));
+  button.setAttribute('aria-label', enabled ? '关闭深度思考模式' : '开启深度思考模式');
+  const label = button.querySelector('[data-thinking-label]');
+  if (label) label.textContent = enabled ? '深度思考已开启' : '深度思考';
+  const symbol = button.querySelector('.thinking-symbol');
+  if (symbol) symbol.textContent = enabled ? '✓' : '◉';
 }
 
 function parseSSEChunk(text, assistantMessage) {
