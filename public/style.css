@@ -737,3 +737,17 @@ body.sidebar-collapsed .sidebar { flex-basis: 70px; padding-right: 8px; padding-
 .welcome-modern h1 { letter-spacing: -.035em; }
 .welcome-description { letter-spacing: 0; }
 .footer-note { justify-content: center; font: 10px/1.5 var(--sans); letter-spacing: 0; }
+
+/* MCP manager and advanced model controls */
+#mcpManager { width: min(760px, calc(100vw - 28px)); max-height: 90vh; overflow-y: auto; }
+#mcpManagerForm { display: grid; gap: 16px; }
+.mcp-editor { padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 13px; }
+.mcp-editor h3 { margin: 0; font-size: 14px; }
+.mcp-editor label { display: grid; gap: 6px; }
+.mcp-editor input, .mcp-editor textarea, .mcp-editor select { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font: inherit; }
+.mcp-editor .inline-check { display: flex; align-items: center; gap: 8px; }
+.mcp-editor .inline-check input { width: auto; }
+#mcpServerList .plugin-card { border: 1px solid var(--line); border-radius: 12px; padding: 13px; }
+#mcpServerList .plugin-card p { margin: 7px 0 10px; color: var(--muted); font-size: 12px; }
+#mcpServerList .plugin-card button { margin-right: 6px; padding: 7px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.modal label small { line-height: 1.5; }
