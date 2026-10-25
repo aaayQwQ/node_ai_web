@@ -168,8 +168,16 @@ function start(root) {
         const previousProviders = currentConfig.providers || [];
         update.providers = update.providers.map(provider => {
           const previous = previousProviders.find(item => item.id === provider.id);
+          const headers = Object.assign({}, provider.customHeaders || {});
+          const previousHeaders = previous && previous.customHeaders || {};
+          for (const [key, value] of Object.entries(headers)) {
+            if (value === '••••••••' && Object.prototype.hasOwnProperty.call(previousHeaders, key)) {
+              headers[key] = previousHeaders[key];
+            }
+          }
           return Object.assign({}, provider, {
-            apiKey: provider.apiKey || (previous && previous.apiKey) || ''
+            apiKey: provider.apiKey || (previous && previous.apiKey) || '',
+            customHeaders: headers
           });
         });
       }
