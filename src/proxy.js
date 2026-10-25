@@ -154,10 +154,10 @@ async function check(baseURL, apiKey) {
 
 async function chat(config, payload, clientResponse, signal, log) {
   const target = endpointURL(config.baseURL, '/v1/chat/completions');
-  const headers = authHeaders(config.apiKey, {
+  const headers = authHeaders(config.apiKey, Object.assign({}, config.customHeaders || {}, {
     'Content-Type': 'application/json',
     Accept: payload.stream ? 'text/event-stream' : 'application/json'
-  });
+  }));
   const body = JSON.stringify(payload);
 
   return new Promise((resolve, reject) => {
