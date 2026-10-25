@@ -34,7 +34,7 @@ module.exports = function createMCPManager(root, log) {
   function normalize(input, existing) {
     const value = Object.assign({}, existing || {}, input || {});
     value.id = String(value.id || ('mcp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7)));
-    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(value.id) || value.id.includes('__')) throw new Error('MCP 服务 ID 只能包含字母、数字、下划线和连字符，且不能包含双下划线。');
+    if (!/^[a-zA-Z0-9_-]{1,20}$/.test(value.id) || value.id.includes('__')) throw new Error('MCP 服务 ID 只能包含字母、数字、下划线和连字符，且不能包含双下划线。');
     value.name = String(value.name || '自定义 MCP 服务').trim().slice(0, 100);
     value.type = String(value.type || 'http').toLowerCase();
     if (!['http', 'sse', 'stdio'].includes(value.type)) throw new Error('MCP 类型仅支持 HTTP、SSE、Stdio。');
@@ -340,7 +340,7 @@ module.exports = function createMCPManager(root, log) {
       approval: server.approval,
       type: 'function',
       function: {
-        name: server.id + '__' + String(tool.name || '').replace(/[^a-zA-Z0-9_-]/g, '_'),
+        name: server.id + '__' + String(tool.name || 'tool').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40),
         description: String(tool.description || '').slice(0, 2000),
         parameters: tool.inputSchema && typeof tool.inputSchema === 'object'
           ? tool.inputSchema : { type: 'object', properties: {} }
