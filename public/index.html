@@ -181,13 +181,10 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
     window.MathJax = {
-      tex: { inlineMath: [['
-</body>
-</html>
-, '
-</body>
-</html>
-], ['\\\\(', '\\\\)']], displayMath: [['$', '$'], ['\\\\[', '\\\\]']] },
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
       startup: { typeset: false }
     };
   </script>
