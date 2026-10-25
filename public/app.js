@@ -1092,11 +1092,11 @@ async function readProviderModels() {
     };
     const saved = providerDefaults().find(item => item.id === id);
     if (!provider.apiKey && saved) provider.apiKey = saved.apiKey || '';
-    if (!provider.baseURL || !provider.apiKey) throw new Error('请先填写 Base URL 和 API Key。');
+    if (!provider.baseURL || (!provider.apiKey && !(saved && saved.apiKeySet))) throw new Error('请先填写 Base URL 和 API Key。');
     const result = await api('/api/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ baseURL: provider.baseURL, apiKey: provider.apiKey, customHeaders: provider.customHeaders })
+      body: JSON.stringify({ providerId: provider.id === 'preview' ? '' : provider.id, baseURL: provider.baseURL, apiKey: provider.apiKey, customHeaders: provider.customHeaders })
     });
     const models = Array.isArray(result.models) ? result.models.filter(item => item && item.id) : [];
     state.providerModels = models.map(item => item.id);
