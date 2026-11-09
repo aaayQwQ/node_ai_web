@@ -22,7 +22,31 @@ module.exports = function createMCPManager(root, log) {
   function readAll() {
     try {
       const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-      return Array.isArray(parsed) ? parsed : [];
+      if (Array.isArray(parsed)) return parsed;
+
+      // Import the standard MCP client shape:
+      // { "mcpServers": { "server_id": { "type": "...", "url": "..." } } }
+      if (parsed && parsed.mcpServers && typeof parsed.mcpServers === 'object' && !Array.isArray(parsed.mcpServers)) {
+        return Object.entries(parsed.mcpServers).map(([id, item]) => {
+          const source = item && typeof item === 'object' ? item : {};
+          let type = String(source.type || (source.command ? 'stdio' : 'http')).toLowerCase().replace(/-/g, '_');
+          if (type === 'streamable_http') type = 'http';
+          return {
+            id: String(id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 20) || 'mcp-server',
+            name: String(source.name || id).slice(0, 100),
+            type,
+            url: String(source.url || ''),
+            command: String(source.command || ''),
+            args: Array.isArray(source.args) ? source.args : [],
+            env: source.env && typeof source.env === 'object' && !Array.isArray(source.env) ? source.env : {},
+            headers: source.headers && typeof source.headers === 'object' && !Array.isArray(source.headers) ? source.headers : {},
+            enabled: source.disabled !== true && source.enabled !== false,
+            approval: source.approval === 'auto' ? 'auto' : 'confirm',
+            timeout: source.timeout || TIMEOUT_MS
+          };
+        });
+      }
+      return [];
     } catch (_) {
       return [];
     }
