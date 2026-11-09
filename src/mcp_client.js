@@ -41,8 +41,10 @@ module.exports = function createMCPManager(root, log) {
     value.id = String(value.id || ('mcp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7)));
     if (!/^[a-zA-Z0-9_-]{1,20}$/.test(value.id) || value.id.includes('__')) throw new Error('MCP 服务 ID 只能包含字母、数字、下划线和连字符，且不能包含双下划线。');
     value.name = String(value.name || '自定义 MCP 服务').trim().slice(0, 100);
-    value.type = String(value.type || 'http').toLowerCase();
-    if (!['http', 'sse', 'websocket', 'stdio'].includes(value.type)) throw new Error('MCP 类型仅支持 HTTP、SSE、WebSocket、Stdio。');
+    value.type = String(value.type || 'http').toLowerCase().replace(/-/g, '_');
+    // Accept common MCP client configuration names for Streamable HTTP.
+    if (value.type === 'streamable_http') value.type = 'http';
+    if (!['http', 'sse', 'websocket', 'stdio'].includes(value.type)) throw new Error('MCP 类型仅支持 Streamable HTTP、SSE、WebSocket、Stdio。');
     value.enabled = Boolean(value.enabled);
     value.approval = value.approval === 'auto' ? 'auto' : 'confirm';
     value.headers = value.headers && typeof value.headers === 'object' && !Array.isArray(value.headers) ? value.headers : {};
