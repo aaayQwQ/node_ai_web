@@ -127,6 +127,7 @@
         <label>上下文轮数
           <input id="contextWindow" type="number" min="1" max="100" step="1">
         </label>
+        <label class="inline-check"><input id="mcpAutoApprove" type="checkbox"> MCP 工具无需逐次授权，所有聊天自动调用</label>
         <label>网页访问密码（可选）
           <input id="webPassword" type="password" autocomplete="new-password">
         </label>
@@ -140,6 +141,7 @@
         <button type="button" class="primary-button" id="saveSettings">保存设置 <span>→</span></button>
       </div>
       <p class="form-result" id="settingsResult" role="status"></p>
+      <p class="form-hint">关闭逐次授权后，模型发起的 MCP 工具请求会直接执行。请仅对可信的 MCP 服务启用。</p>
     </form>
   </dialog>
 
