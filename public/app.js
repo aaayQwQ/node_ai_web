@@ -358,7 +358,7 @@ function renderMessages() {
       $('prompt').focus();
     }));
     const setupButton = $('welcomeSetupBtn');
-    if (setupButton) setupButton.addEventListener('click', openSettings);
+    if (setupButton) setupButton.addEventListener('click', openProviders);
     $('modelSelect').title = state.config.model || '默认模型';
     return;
   }
@@ -935,6 +935,17 @@ async function openPlugins() {
   }
 }
 
+function showMCPList() {
+  $('mcpEditor').hidden = true;
+  $('mcpServerList').hidden = false;
+  $('mcpAddTop').hidden = false;
+}
+function showMCPEditor() {
+  $('mcpEditor').hidden = false;
+  $('mcpServerList').hidden = true;
+  $('mcpAddTop').hidden = true;
+  $('mcpEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 function resetMCPForm() {
   $('mcpId').value = '';
   $('mcpName').value = '';
@@ -978,6 +989,7 @@ function editMCPServer(server) {
   $('mcpEditorTitle').textContent = '编辑 MCP 服务';
   $('mcpResult').textContent = '';
   updateMCPTypeFields();
+  showMCPEditor();
 }
 
 async function refreshMCPServers() {
@@ -986,9 +998,8 @@ async function refreshMCPServers() {
   try {
     const servers = await api('/api/mcp/servers');
     if (!servers.length) {
-      const empty = document.createElement('p');
-      empty.textContent = '尚未添加 MCP 服务。';
-      list.appendChild(empty);
+      list.hidden = false;
+      $('mcpAddTop').hidden = false;
     }
     for (const server of servers) {
       const card = document.createElement('section');
@@ -1054,6 +1065,7 @@ async function refreshMCPServers() {
 async function openMCPManager() {
   resetMCPForm();
   await refreshMCPServers();
+  showMCPList();
   $('mcpManager').showModal();
 }
 
@@ -1084,6 +1096,7 @@ async function saveMCPServer() {
     output.textContent = '已保存：' + result.server.name;
     await refreshMCPServers();
     resetMCPForm();
+    showMCPList();
     showToast('MCP 服务已保存', 'success');
   } catch (error) {
     output.textContent = error.message;
@@ -1094,6 +1107,17 @@ async function saveMCPServer() {
 
 function providerDefaults() {
   return Array.isArray(state.config.providers) ? state.config.providers : [];
+}
+function showProviderList() {
+  $('providerEditor').hidden = true;
+  $('providerListPane').hidden = false;
+  $('providerAddTop').hidden = false;
+}
+function showProviderEditor() {
+  $('providerEditor').hidden = false;
+  $('providerListPane').hidden = true;
+  $('providerAddTop').hidden = true;
+  $('providerEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function resetProviderForm() {
   $('providerId').value = '';
@@ -1120,18 +1144,17 @@ function editProvider(provider) {
   $('providerResult').textContent = '';
   $('providerModels').replaceChildren();
   $('providerModelCount').textContent = '点击“读取模型”加载列表';
+  showProviderEditor();
 }
 function renderProviders() {
   const list = $('providerList');
   list.replaceChildren();
   const providers = providerDefaults();
   if (!providers.length) {
-    const empty = document.createElement('p');
-    empty.className = 'provider-empty';
-    empty.textContent = '还没有服务商。点击右上角“添加服务商”开始配置。';
-    list.appendChild(empty);
+    $('providerListPane').hidden = true;
     return;
   }
+  $('providerListPane').hidden = false;
   for (const provider of providers) {
     const card = document.createElement('section');
     card.className = 'provider-card';
@@ -1169,6 +1192,7 @@ async function persistProviders(providers, selectedModels) {
 async function openProviders() {
   resetProviderForm();
   renderProviders();
+  showProviderList();
   $('providersDialog').showModal();
 }
 async function readProviderModels() {
@@ -1236,6 +1260,7 @@ async function saveProvider() {
     $('providerId').value = id;
     $('providerResult').textContent = '服务商已保存。现在点击“读取模型”，勾选模型后再保存选择。';
     renderProviders();
+    showProviderList();
     showToast('服务商已保存', 'success');
   } catch (error) {
     $('providerResult').textContent = error.message;
@@ -1281,27 +1306,21 @@ $('prompt').addEventListener('input', event => {
   $('composer').classList.toggle('composer-has-text', Boolean(event.target.value.trim()));
 });
 
-$('settingsBtn').addEventListener('click', openSettings);
-$('profileBtn').addEventListener('click', openSettings);
+$('settingsBtn').addEventListener('click', openProviders);
 $('pluginsBtn').addEventListener('click', openMCPManager);
 $('mcpType').addEventListener('change', updateMCPTypeFields);
-$('mcpAddTop').addEventListener('click', () => { resetMCPForm(); $('mcpEditorTitle').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('mcpName').focus(); });
+$('mcpAddTop').addEventListener('click', () => { resetMCPForm(); showMCPEditor(); $('mcpName').focus(); });
+$('mcpBack').addEventListener('click', showMCPList);
+$('providerBack').addEventListener('click', showProviderList);
 $('openProviders').addEventListener('click', openProviders);
-$('providerAddTop').addEventListener('click', () => { resetProviderForm(); $('providerName').focus(); });
+$('providerAddTop').addEventListener('click', () => { resetProviderForm(); showProviderEditor(); $('providerName').focus(); });
 $('providerReset').addEventListener('click', resetProviderForm);
 $('providerSave').addEventListener('click', saveProvider);
 $('providerTest').addEventListener('click', readProviderModels);
 $('saveSelectedModels').addEventListener('click', saveSelectedProviderModels);
 $('mcpReset').addEventListener('click', resetMCPForm);
 $('mcpSave').addEventListener('click', saveMCPServer);
-$('statusBtn').addEventListener('click', async () => {
-  try {
-    $('statusInfo').textContent = JSON.stringify(await api('/health'), null, 2);
-  } catch (error) {
-    $('statusInfo').textContent = error.message;
-  }
-  $('statusDialog').showModal();
-});
+$('statusBtn').addEventListener('click', openSettings);
 $('themeBtn').addEventListener('click', () => {
   document.body.classList.toggle('light');
   localStorage.setItem(
