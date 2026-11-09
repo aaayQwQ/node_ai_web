@@ -153,36 +153,125 @@ module.exports = function createMCPManager(root, log) {
     return new Promise((resolve, reject) => {
       let url;
       try { url = new URL(urlValue); } catch (_) { reject(new Error('MCP URL 无效。')); return; }
+
       const transport = url.protocol === 'https:' ? https : http;
+      let expectedId = null;
+      if (body !== undefined) {
+        try {
+          const requestMessage = JSON.parse(body);
+          if (requestMessage && Object.prototype.hasOwnProperty.call(requestMessage, 'id')) {
+            expectedId = requestMessage.id;
+          }
+        } catch (_) {}
+      }
+
+      let settled = false;
+      let response = null;
+      let responseText = '';
+      let eventBuffer = '';
+      let eventData = [];
+      let lastEventResult = null;
+
+      function finish(error, result) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (error) reject(error);
+        else resolve(result);
+        // Streamable HTTP may keep its SSE response open after the matching
+        // JSON-RPC response. We only need this request's response event.
+        if (response && !response.complete) response.destroy();
+      }
+
+      function parseEvent() {
+        if (!eventData.length) return false;
+        const data = eventData.join('\n');
+        eventData = [];
+        if (!data || data === '[DONE]') return false;
+        let message;
+        try { message = JSON.parse(data); } catch (_) { return false; }
+        if (!message || typeof message !== 'object') return false;
+        message._headers = response ? response.headers : {};
+        lastEventResult = message;
+        if (expectedId !== null && message.id === expectedId) {
+          finish(null, message);
+          return true;
+        }
+        return false;
+      }
+
       const req = transport.request(url, {
         method: body === undefined ? 'GET' : 'POST',
-        headers: Object.assign({ Accept: 'application/json, text/event-stream' }, headers || {},
-          body === undefined ? {} : { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) })
+        headers: Object.assign({
+          Accept: 'application/json, text/event-stream'
+        }, headers || {}, body === undefined ? {} : {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body)
+        })
       }, res => {
-        const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
-        res.on('end', () => {
-          const text = Buffer.concat(chunks).toString('utf8');
-          if ((res.statusCode || 500) < 200 || (res.statusCode || 500) >= 300) {
-            reject(new Error('MCP HTTP ' + res.statusCode + '：' + text.slice(0, 600)));
+        response = res;
+        const status = res.statusCode || 500;
+        if (status < 200 || status >= 300) {
+          const errorChunks = [];
+          res.on('data', chunk => {
+            if (Buffer.concat(errorChunks).length < 6000) errorChunks.push(chunk);
+          });
+          res.on('end', () => finish(new Error('MCP HTTP ' + status + '：' + Buffer.concat(errorChunks).toString('utf8').slice(0, 600))));
+          return;
+        }
+
+        const contentType = String(res.headers['content-type'] || '').toLowerCase();
+        const isEventStream = contentType.includes('text/event-stream');
+        res.on('data', chunk => {
+          if (settled) return;
+          const text = chunk.toString('utf8');
+          if (!isEventStream) {
+            responseText += text;
+            if (responseText.length > 2 * 1024 * 1024) finish(new Error('MCP 响应超过 2 MB 限制。'));
             return;
           }
-          if (!text.trim()) { resolve({}); return; }
-          if ((res.headers['content-type'] || '').includes('text/event-stream')) {
-            const data = text.split(/\r?\n/).filter(line => line.startsWith('data:'))
-              .map(line => line.slice(5).trim()).filter(Boolean);
-            for (const item of data.reverse()) {
-              try { const parsed = JSON.parse(item); parsed._headers = res.headers; resolve(parsed); return; } catch (_) {}
+
+          eventBuffer += text;
+          const lines = eventBuffer.split(/\r?\n/);
+          eventBuffer = lines.pop();
+          for (const line of lines) {
+            if (line === '') {
+              if (parseEvent()) return;
+            } else if (line.startsWith('data:')) {
+              eventData.push(line.slice(5).replace(/^ /, ''));
             }
-            reject(new Error('MCP SSE 响应中没有有效 JSON data。'));
+          }
+        });
+
+        res.on('end', () => {
+          if (settled) return;
+          if (isEventStream) {
+            if (eventBuffer.startsWith('data:')) eventData.push(eventBuffer.slice(5).replace(/^ /, ''));
+            parseEvent();
+            if (lastEventResult) finish(null, lastEventResult);
+            else if (expectedId === null) finish(null, {});
+            else finish(new Error('MCP SSE 响应结束，但没有收到对应的 JSON-RPC 响应。'));
             return;
           }
-          try { const parsed = JSON.parse(text); if (parsed && typeof parsed === 'object') parsed._headers = res.headers; resolve(parsed); }
-          catch (_) { reject(new Error('MCP 服务返回了非 JSON 响应。')); }
+
+          if (!responseText.trim()) { finish(null, { _headers: res.headers }); return; }
+          try {
+            const parsed = JSON.parse(responseText);
+            if (parsed && typeof parsed === 'object') parsed._headers = res.headers;
+            finish(null, parsed);
+          } catch (_) {
+            finish(new Error('MCP 服务返回了非 JSON 响应。'));
+          }
         });
+
+        res.on('error', error => finish(error));
       });
-      req.setTimeout(timeout || TIMEOUT_MS, () => req.destroy(new Error('MCP 请求超时。')));
-      req.on('error', reject);
+
+      const timer = setTimeout(() => {
+        req.destroy();
+        finish(new Error('MCP 请求超时（' + (body === undefined ? 'GET' : 'POST') + ' ' + url.pathname + '）。'));
+      }, timeout || TIMEOUT_MS);
+      req.on('error', error => finish(error));
       if (body !== undefined) req.write(body);
       req.end();
     });
