@@ -507,6 +507,80 @@ function updateThinkingButton() {
   if (symbol) symbol.textContent = enabled ? '✓' : '◉';
 }
 
+function buildContextMessages(messages, maxTurns) {
+  const turns = [];
+  let current = [];
+
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (!message || typeof message !== 'object') continue;
+    if (message.role === 'user') {
+      if (current.length) turns.push(current);
+      current = [message];
+    } else if (current.length) {
+      current.push(message);
+    }
+  }
+  if (current.length) turns.push(current);
+
+  const limit = Math.max(1, Math.floor(Number(maxTurns) || 20));
+  const selectedTurns = turns.slice(-limit);
+  const context = [];
+
+  for (const turn of selectedTurns) {
+    const toolCallIds = new Set();
+    const completedToolCallIds = new Set();
+    const validMessages = [];
+
+    for (const message of turn) {
+      if (message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length) {
+        const ids = message.tool_calls
+          .map(call => call && call.id)
+          .filter(id => typeof id === 'string' && id);
+        const results = turn.filter(item =>
+          item.role === 'tool' && ids.includes(item.tool_call_id)
+        );
+        const complete = ids.length === message.tool_calls.length &&
+          ids.every(id => results.some(item => item.tool_call_id === id));
+
+        if (!complete) continue;
+        ids.forEach(id => toolCallIds.add(id));
+        validMessages.push({
+          role: 'assistant',
+          content: message.content || null,
+          tool_calls: message.tool_calls
+        });
+        continue;
+      }
+
+      if (message.role === 'tool') {
+        if (!toolCallIds.has(message.tool_call_id) || completedToolCallIds.has(message.tool_call_id)) continue;
+        completedToolCallIds.add(message.tool_call_id);
+        validMessages.push({
+          role: 'tool',
+          tool_call_id: message.tool_call_id,
+          content: message.content || ''
+        });
+        continue;
+      }
+
+      if (message.role === 'assistant') {
+        if (message.content || message.reasoning) {
+          validMessages.push({ role: 'assistant', content: message.content || '' });
+        }
+        continue;
+      }
+
+      if (message.role === 'user') {
+        validMessages.push({ role: 'user', content: message.content || '' });
+      }
+    }
+
+    context.push(...validMessages);
+  }
+
+  return context;
+}
+
 function parseSSEChunk(text, assistantMessage) {
   const lines = text.split(/\r?\n/);
 
@@ -597,22 +671,7 @@ async function sendMessage(event) {
     while (continueTools && round < 5) {
       round++;
       const maxTurns = Number(state.config.contextWindow) || 20;
-      const allMessages = chat.messages.filter(message =>
-        message.role === 'user' || message.role === 'tool' ||
-        (message.role === 'assistant' && (message.content || message.tool_calls))
-      );
-      const userIndices = [];
-      allMessages.forEach((message, index) => { if (message.role === 'user') userIndices.push(index); });
-      const startIndex = userIndices.length > maxTurns ? userIndices[userIndices.length - maxTurns] : 0;
-      const contextMessages = allMessages.slice(startIndex).map(message => {
-        if (message.role === 'assistant' && message.tool_calls) {
-          return { role: 'assistant', content: message.content || null, tool_calls: message.tool_calls };
-        }
-        if (message.role === 'tool') {
-          return { role: 'tool', tool_call_id: message.tool_call_id, content: message.content || '' };
-        }
-        return { role: message.role, content: message.content || '' };
-      });
+      const contextMessages = buildContextMessages(chat.messages, maxTurns);
 
       const payload = {
         model: $('modelSelect').value || state.config.model,
