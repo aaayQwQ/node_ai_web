@@ -227,7 +227,22 @@ module.exports = function createMCPManager(root, log) {
           const text = chunk.toString('utf8');
           if (!isEventStream) {
             responseText += text;
-            if (responseText.length > 2 * 1024 * 1024) finish(new Error('MCP 响应超过 2 MB 限制。'));
+            if (responseText.length > 2 * 1024 * 1024) {
+              finish(new Error('MCP 响应超过 2 MB 限制。'));
+              return;
+            }
+
+            // Some reverse proxies keep a JSON response socket open even after
+            // the complete JSON-RPC object has arrived. Parse incrementally so
+            // a complete response does not depend on the peer closing TCP.
+            try {
+              const parsed = JSON.parse(responseText);
+              if (parsed && typeof parsed === 'object' &&
+                  (expectedId === null || parsed.id === expectedId || parsed.error)) {
+                parsed._headers = res.headers;
+                finish(null, parsed);
+              }
+            } catch (_) {}
             return;
           }
 
