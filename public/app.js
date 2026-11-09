@@ -588,7 +588,7 @@ async function sendMessage(event) {
 
   try {
     let mcpTools = [];
-    try { mcpTools = await api('/api/mcp/tools'); }
+    try { mcpTools = await api('/api/mcp/tools', { signal: state.controller.signal }); }
     catch (error) { showToast('读取 MCP 工具失败：' + error.message, 'warning'); }
     const toolLookup = new Map(mcpTools.map(tool => [tool.function.name, tool]));
     let round = 0;
@@ -670,6 +670,11 @@ async function sendMessage(event) {
           chat.messages.push({ role: 'tool', tool_call_id: call.id, content: '用户拒绝了该工具调用。' });
           continue;
         }
+        if (state.controller.signal.aborted) {
+          const abortError = new Error('已停止生成。');
+          abortError.name = 'AbortError';
+          throw abortError;
+        }
         showToast('正在调用 MCP 工具：' + description, 'info');
         let args;
         try { args = JSON.parse(call.function.arguments || '{}'); }
@@ -677,6 +682,7 @@ async function sendMessage(event) {
         const result = await api('/api/mcp/call', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: state.controller.signal,
           body: JSON.stringify({ name: call.function.name, arguments: args })
         });
         chat.messages.push({
