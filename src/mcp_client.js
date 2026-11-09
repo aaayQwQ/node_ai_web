@@ -11,7 +11,8 @@ const { spawn } = require('child_process');
 const { URL } = require('url');
 
 const PROTOCOL_VERSION = '2024-11-05';
-const TIMEOUT_MS = 15000;
+const TIMEOUT_MS = 120000;
+const MAX_TIMEOUT_MS = 300000;
 const MAX_WS_MESSAGE = 2 * 1024 * 1024;
 
 module.exports = function createMCPManager(root, log) {
@@ -42,7 +43,7 @@ module.exports = function createMCPManager(root, log) {
             headers: source.headers && typeof source.headers === 'object' && !Array.isArray(source.headers) ? source.headers : {},
             enabled: source.disabled !== true && source.enabled !== false,
             approval: source.approval === 'auto' ? 'auto' : 'confirm',
-            timeout: source.timeout || TIMEOUT_MS
+            timeout: Math.max(1000, Math.min(MAX_TIMEOUT_MS, Number(source.timeout) || TIMEOUT_MS))
           };
         });
       }
@@ -74,7 +75,7 @@ module.exports = function createMCPManager(root, log) {
     value.headers = value.headers && typeof value.headers === 'object' && !Array.isArray(value.headers) ? value.headers : {};
     value.headers = Object.fromEntries(Object.entries(value.headers).filter(([k, v]) =>
       /^[a-zA-Z0-9-]{1,80}$/.test(k) && typeof v === 'string' && v.length <= 4000));
-    value.timeout = Math.max(1000, Math.min(60000, Number(value.timeout) || TIMEOUT_MS));
+    value.timeout = Math.max(1000, Math.min(MAX_TIMEOUT_MS, Number(value.timeout) || TIMEOUT_MS));
     if (value.type === 'stdio') {
       value.command = String(value.command || '').trim().slice(0, 500);
       value.args = Array.isArray(value.args) ? value.args.map(x => String(x).slice(0, 500)).slice(0, 40) : [];
