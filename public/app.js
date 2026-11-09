@@ -458,6 +458,7 @@ async function loadSettings() {
     $('topP').value = state.config.topP ?? 1;
     $('maxTokens').value = state.config.maxTokens ?? 4096;
     $('contextWindow').value = state.config.contextWindow ?? 20;
+    $('mcpAutoApprove').checked = state.config.mcpAutoApprove === true;
     $('customHeaders').value = JSON.stringify(state.config.customHeaders || {}, null, 2);
     $('webPassword').value = '';
     $('webPassword').placeholder = '留空则保留当前密码';
@@ -725,7 +726,7 @@ async function sendMessage(event) {
         const registered = toolLookup.get(call.function.name);
         if (!registered) throw new Error('模型请求了未注册的 MCP 工具：' + call.function.name);
         const description = registered.serverName + ' / ' + registered.originalName;
-        if (registered && (registered.approval !== 'auto') && !window.confirm('允许调用 MCP 工具？\n' + description + '\n参数：\n' + call.function.arguments)) {
+        if (!state.config.mcpAutoApprove && registered.approval !== 'auto' && !window.confirm('允许调用 MCP 工具？\n' + description + '\n参数：\n' + call.function.arguments)) {
           chat.messages.push({ role: 'tool', tool_call_id: call.id, content: '用户拒绝了该工具调用。' });
           continue;
         }
@@ -796,6 +797,7 @@ async function saveSettings() {
     topP: Number($('topP').value),
     maxTokens: Number($('maxTokens').value),
     contextWindow: Number($('contextWindow').value),
+    mcpAutoApprove: $('mcpAutoApprove').checked,
     customHeaders: parseJSONField($('customHeaders').value, '自定义请求头'),
     webPassword: $('webPassword').value
   };
