@@ -203,6 +203,7 @@ function start(root) {
         'topP',
         'maxTokens',
         'contextWindow',
+        'mcpAutoApprove',
         'customHeaders',
         'providers',
         'selectedModels',
