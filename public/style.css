@@ -1959,3 +1959,50 @@ html body .chat-scroll > .welcome-modern .setup-foot {
 /* WebSocket transport option should remain readable in the MCP editor. */
 #mcpManager #mcpType option[value="websocket"] { font-weight: 600; }
 #mcpManager #mcpUrl[placeholder*="wss://"] { font-family: var(--mono); }
+
+
+/* 2026-11-10 simplified navigation and focused connection managers. */
+.sidebar-bottom { gap: 5px; padding-top: 12px; }
+.sidebar-bottom .nav-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.sidebar-bottom .nav-button:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--paper-2));
+}
+#providerEditor, #mcpEditor { margin-top: 8px; }
+#providerEditor[hidden], #providerListPane[hidden], #mcpEditor[hidden],
+#mcpServerList[hidden], #providerAddTop[hidden], #mcpAddTop[hidden] {
+  display: none !important;
+}
+.provider-modal .provider-layout { display: block; }
+.provider-modal #providerListPane {
+  padding: 0;
+  border: 0;
+}
+.provider-modal #providerList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+.provider-modal #providerList .provider-card {
+  margin: 0;
+  padding: 15px;
+}
+.provider-modal #providerEditor {
+  max-width: 720px;
+  margin: 0 auto;
+}
+#mcpManager #mcpServerList {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+}
+#mcpManager .mcp-editor {
+  max-width: 720px;
+  margin: 0 auto;
+}
