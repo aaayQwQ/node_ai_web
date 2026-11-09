@@ -669,8 +669,12 @@ async function sendMessage(event) {
     let round = 0;
     let continueTools = true;
 
-    while (continueTools && round < 5) {
+    // 每轮把全部 MCP 工具定义一次性提供给模型；同一响应中的多个工具调用并行执行。
+    // 最多允许 20 轮真正的工具调用，之后追加一轮禁用工具的总结请求，避免把轮数上限错误地显示成最终答案。
+    const MAX_TOOL_ROUNDS = 20;
+    while (continueTools && round <= MAX_TOOL_ROUNDS) {
       round++;
+      const finalSummaryTurn = round > MAX_TOOL_ROUNDS;
       const maxTurns = Number(state.config.contextWindow) || 20;
       const contextMessages = buildContextMessages(chat.messages, maxTurns);
 
@@ -683,7 +687,11 @@ async function sendMessage(event) {
         max_tokens: Number(state.config.maxTokens ?? 4096)
       };
       if (state.thinking) payload.reasoning_effort = 'high';
-      if (mcpTools.length) payload.tools = mcpTools.map(tool => ({ type: 'function', function: tool.function }));
+      if (mcpTools.length && !finalSummaryTurn) {
+        payload.tools = mcpTools.map(tool => ({ type: 'function', function: tool.function }));
+      } else if (finalSummaryTurn) {
+        payload.tool_choice = 'none';
+      }
       const response = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers: requestHeaders({ 'Content-Type': 'application/json' }),
@@ -719,16 +727,20 @@ async function sendMessage(event) {
         continueTools = false;
         break;
       }
+      if (finalSummaryTurn) {
+        assistant.content = '模型在总结阶段仍尝试调用工具，已停止继续调用。请根据上方已返回的工具结果继续回答。';
+        continueTools = false;
+        break;
+      }
       assistant.tool_calls = toolCalls;
       assistant.content = assistant.content || '';
       renderMessages();
-      for (const call of toolCalls) {
+      const pendingCalls = toolCalls.map(async call => {
         const registered = toolLookup.get(call.function.name);
         if (!registered) throw new Error('模型请求了未注册的 MCP 工具：' + call.function.name);
         const description = registered.serverName + ' / ' + registered.originalName;
         if (!state.config.mcpAutoApprove && registered.approval !== 'auto' && !window.confirm('允许调用 MCP 工具？\n' + description + '\n参数：\n' + call.function.arguments)) {
-          chat.messages.push({ role: 'tool', tool_call_id: call.id, content: '用户拒绝了该工具调用。' });
-          continue;
+          return { role: 'tool', tool_call_id: call.id, content: '用户拒绝了该工具调用。' };
         }
         if (state.controller.signal.aborted) {
           const abortError = new Error('已停止生成。');
@@ -745,19 +757,20 @@ async function sendMessage(event) {
           signal: state.controller.signal,
           body: JSON.stringify({ name: call.function.name, arguments: args })
         });
-        chat.messages.push({
+        return {
           role: 'tool',
           tool_call_id: call.id,
           content: JSON.stringify(result.result)
-        });
-      }
+        };
+      });
+      // 同一轮模型同时请求的工具并发执行，全部完成后一次性把结果交还模型。
+      const toolResults = await Promise.all(pendingCalls);
+      chat.messages.push(...toolResults);
       assistant = { role: 'assistant', content: '', reasoning: '' };
       chat.messages.push(assistant);
       saveHistory();
     }
-    if (round >= 5 && continueTools) {
-      assistant.content = '工具调用轮数已达到上限，请继续提问或减少工具链长度。';
-    } else if (!assistant.content && !assistant.reasoning) {
+    if (!assistant.content && !assistant.reasoning) {
       assistant.content = '（服务已响应，但没有返回可显示的文本内容。）';
     }
   } catch (error) {
