@@ -1362,12 +1362,10 @@ $('prompt').addEventListener('input', event => {
 });
 
 $('settingsBtn').addEventListener('click', openSettingsHub);
-$('pluginsBtn').addEventListener('click', openMCPManager);
 $('mcpType').addEventListener('change', updateMCPTypeFields);
 $('mcpAddTop').addEventListener('click', () => { resetMCPForm(); showMCPEditor(); $('mcpName').focus(); });
 $('mcpBack').addEventListener('click', showMCPList);
 $('providerBack').addEventListener('click', showProviderList);
-$('openProviders').addEventListener('click', openProviders);
 $('providerAddTop').addEventListener('click', () => { resetProviderForm(); showProviderEditor(); $('providerName').focus(); });
 $('providerReset').addEventListener('click', resetProviderForm);
 $('providerSave').addEventListener('click', saveProvider);
