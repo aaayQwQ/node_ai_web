@@ -59,7 +59,7 @@ node main.js --check
 ## 排错
 
 - 确认端口 3001 没被占用。
-- Base URL 可填写 `https://api.example.com` 或 `https://api.example.com/v1`；程序会避免重复拼接 `/v1`。不要把 API Key 或网页密码放进 URL。
+- Base URL 默认仅允许公网 DNS 目标；如确实需要连接本机/私网模型服务，必须显式设置 `NODE_AI_WEB_ALLOW_PRIVATE_UPSTREAM=true`。该开关会放宽上游和 MCP HTTP 的 SSRF 防护，只能在可信本机环境使用。Base URL 可填写 `https://api.example.com` 或 `https://api.example.com/v1`；程序会避免重复拼接 `/v1`。不要把 API Key 或网页密码放进 URL。
 - 检查 API Key、模型名和上游余额/限额。
 - 查看 `logs/` 下当天日志。
 - 查看 `http://127.0.0.1:3001/health` 检查服务是否运行。
