@@ -170,9 +170,8 @@ function renderMarkdown(value) {
   return blocks.join('');
 }
 function renderAssistantHTML(message) {
-  return (message.reasoning
-    ? '<details class="thinking-panel"><summary><span class="thinking-pulse"></span>已深度思考 <span class="thinking-panel-note">展开查看</span></summary><div class="thinking-content">' + renderMarkdown(message.reasoning) + '</div></details>'
-    : '') + renderMarkdown(message.content || (state.controller ? '正在思考…' : ''))
+  // Only render the user-facing answer. Reasoning and tool payloads remain internal.
+  return renderMarkdown(message.content || (state.controller ? '正在整理回复…' : ''))
     + (message.error ? '<div class="message-inline-error">' + escapeHTML(message.error) + '</div>' : '')
     + (message.stopped ? '<div class="message-stopped">已停止生成</div>' : '');
 }
@@ -192,8 +191,7 @@ function renderStreamingMessage(message) {
   if (!row) return;
   const bubble = row.querySelector('.bubble');
   if (!bubble) return;
-  const notice = bubble.querySelector('.message-tool-notice');
-  bubble.innerHTML = (notice ? notice.outerHTML : '') + renderAssistantHTML(message);
+  bubble.innerHTML = renderAssistantHTML(message);
   bindCopyButtons(bubble);
   const container = $('messages');
   container.scrollTop = container.scrollHeight;
@@ -444,16 +442,8 @@ function renderMessages() {
       bubble.textContent = message.content || '';
       row.appendChild(bubble);
     } else if (message.role === 'tool') {
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble tool-result-bubble';
-      const details = document.createElement('details');
-      const summary = document.createElement('summary');
-      summary.textContent = 'MCP 工具执行结果';
-      const pre = document.createElement('pre');
-      pre.textContent = message.content || '';
-      details.append(summary, pre);
-      bubble.appendChild(details);
-      row.appendChild(bubble);
+      // MCP results are context for the model, never standalone chat messages.
+      continue;
     } else {
       const avatar = document.createElement('div');
       avatar.className = 'avatar';
@@ -461,14 +451,6 @@ function renderMessages() {
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
-        const notice = document.createElement('div');
-        notice.className = 'message-tool-notice';
-        notice.textContent = '工具调用 · ' + message.tool_calls.map(call =>
-          call && call.function && call.function.name ? call.function.name : 'MCP 工具'
-        ).join('、');
-        bubble.appendChild(notice);
-      }
       bubble.innerHTML = renderAssistantHTML(message);
 
       row.append(avatar, bubble);
@@ -819,32 +801,35 @@ async function sendMessage(event) {
       assistant.content = assistant.content || '';
       renderMessages();
       const pendingCalls = toolCalls.map(async call => {
-        const registered = toolLookup.get(call.function.name);
-        if (!registered) throw new Error('模型请求了未注册的 MCP 工具：' + call.function.name);
-        const description = registered.serverName + ' / ' + registered.originalName;
-        if (!state.config.mcpAutoApprove && registered.approval !== 'auto' && !window.confirm('允许调用 MCP 工具？\n' + description + '\n参数：\n' + call.function.arguments)) {
-          return { role: 'tool', tool_call_id: call.id, content: '用户拒绝了该工具调用。' };
+        try {
+          const registered = toolLookup.get(call.function.name);
+          if (!registered) throw new Error('Requested tool is not registered.');
+          if (!state.config.mcpAutoApprove && registered.approval !== 'auto' && !window.confirm('允许调用 MCP 工具？\n' + registered.serverName + ' / ' + registered.originalName + '\n参数：\n' + call.function.arguments)) {
+            return { role: 'tool', tool_call_id: call.id, content: 'Tool execution was declined by the user.' };
+          }
+          if (state.controller.signal.aborted) {
+            const abortError = new Error('Generation stopped.');
+            abortError.name = 'AbortError';
+            throw abortError;
+          }
+          const args = JSON.parse(call.function.arguments || '{}');
+          const result = await api('/api/mcp/call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: state.controller.signal,
+            body: JSON.stringify({ name: call.function.name, arguments: args })
+          });
+          return { role: 'tool', tool_call_id: call.id, content: JSON.stringify(result.result) };
+        } catch (error) {
+          if (error.name === 'AbortError') throw error;
+          // Return execution errors to the model so it can decide how to proceed,
+          // instead of exposing raw tool output or stack details in the conversation.
+          return {
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({ error: 'Tool execution failed.', detail: error.message })
+          };
         }
-        if (state.controller.signal.aborted) {
-          const abortError = new Error('已停止生成。');
-          abortError.name = 'AbortError';
-          throw abortError;
-        }
-        showToast('正在调用 MCP 工具：' + description, 'info');
-        let args;
-        try { args = JSON.parse(call.function.arguments || '{}'); }
-        catch (_) { throw new Error('MCP 工具参数不是有效 JSON：' + call.function.name); }
-        const result = await api('/api/mcp/call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: state.controller.signal,
-          body: JSON.stringify({ name: call.function.name, arguments: args })
-        });
-        return {
-          role: 'tool',
-          tool_call_id: call.id,
-          content: JSON.stringify(result.result)
-        };
       });
       // 同一轮模型同时请求的工具并发执行，全部完成后一次性把结果交还模型。
       const toolResults = await Promise.all(pendingCalls);
@@ -861,10 +846,9 @@ async function sendMessage(event) {
       if (!assistant.content && !assistant.reasoning) assistant.content = '已停止生成。';
       else assistant.stopped = true;
     } else {
-      const detail = '请求失败：' + error.message;
+      const detail = '这次请求未能完成。请检查模型服务商配置和网络连接后重试。';
       if (assistant.content || assistant.reasoning) assistant.error = detail;
       else assistant.content = detail;
-      showToast(error.message, 'warning');
     }
   } finally {
     state.controller = null;
