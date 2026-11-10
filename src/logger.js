@@ -8,8 +8,8 @@ module.exports = function createLogger(root) {
 
   function redact(value) {
     return String(value)
-      .replace(/(authorization|x-api-key|api[-_]?key|webPassword|password|token|secret)(\\s*[=:]\\s*)([^\\s,;]+)/gi, '$1$2[REDACTED]')
-      .replace(/Bearer\\s+[^\\s\"']+/gi, 'Bearer [REDACTED]')
+      .replace(/(authorization|x-api-key|api[-_]?key|webPassword|password|token|secret)(\s*[=:]\s*)([^\s,;]+)/gi, '$1$2[REDACTED]')
+      .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [REDACTED]')
       .replace(/sk-[A-Za-z0-9_-]+/g, 'sk-[REDACTED]');
   }
 
@@ -19,9 +19,7 @@ module.exports = function createLogger(root) {
 
     const now = new Date();
     const day = now.toISOString().slice(0, 10);
-    const safeMessage = String(message)
-      .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [REDACTED]')
-      .replace(/sk-[A-Za-z0-9_-]+/g, 'sk-[REDACTED]');
+    const safeMessage = redact(message);
     const line = '[' + now.toISOString() + '] [' + level + '] '
       + safeMessage + '\n';
 
