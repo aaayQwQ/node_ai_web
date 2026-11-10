@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
@@ -17,6 +18,9 @@ function start(root) {
   const plugins = createPluginEngine(root, config, log);
   const mcp = createMCPManager(root, log);
   const requestCounts = new Map();
+  const mcpApprovals = new Map();
+  const MCP_APPROVAL_TTL_MS = 2 * 60 * 1000;
+  const MCP_APPROVAL_LIMIT = 100;
   const historyFile = path.join(root, 'config', 'history.json');
 
   plugins.init();
@@ -299,15 +303,77 @@ function start(root) {
     if (pathname === '/api/mcp/call' && request.method === 'POST') {
       const body = await readJSON(request, 256 * 1024);
       try {
-        const serverId = String(body.name || '').split('__')[0];
+        const name = String(body.name || '');
+        const serverId = name.split('__')[0];
         const serverInfo = mcp.get(serverId);
         if (!serverInfo || !serverInfo.enabled) throw new Error('MCP 服务不存在或已停用。');
-        if (process.env.NODE_AI_WEB_ALLOW_MCP_CALLS !== 'true' || !currentConfig.mcpAutoApprove || serverInfo.approval !== 'auto') {
-          throw new Error('服务端安全策略已阻止此 MCP 调用。只有设置 NODE_AI_WEB_ALLOW_MCP_CALLS=true，并同时启用全局自动调用和该服务的自动调用策略后，才允许执行。');
+        const autoAllowed = process.env.NODE_AI_WEB_ALLOW_MCP_CALLS === 'true'
+          && currentConfig.mcpAutoApprove === true
+          && serverInfo.approval === 'auto';
+        if (!autoAllowed) {
+          for (const [key, pending] of mcpApprovals) {
+            if (pending.expiresAt <= Date.now()) mcpApprovals.delete(key);
+          }
+          if (mcpApprovals.size >= MCP_APPROVAL_LIMIT) {
+            sendJSON(response, 429, { error: { message: '待审批的 MCP 调用过多，请稍后重试。', code: 'approval_queue_full' } });
+            return true;
+          }
+          const approvalId = crypto.randomBytes(24).toString('hex');
+          mcpApprovals.set(approvalId, {
+            name,
+            arguments: body.arguments && typeof body.arguments === 'object' ? body.arguments : {},
+            serverId,
+            remoteAddress: request.socket.remoteAddress || 'unknown',
+            expiresAt: Date.now() + MCP_APPROVAL_TTL_MS
+          });
+          sendJSON(response, 428, { error: {
+            code: 'approval_required', message: '此 MCP 工具需要用户确认。',
+            approval_id: approvalId, server: serverInfo.name,
+            tool: name.slice(serverId.length + 2),
+            expires_in: Math.floor(MCP_APPROVAL_TTL_MS / 1000)
+          } });
+          return true;
         }
-        const result = await mcp.callTool(body.name, body.arguments || {});
-        log('INFO', 'MCP 工具已执行：' + serverInfo.name + '/' + String(body.name).slice(serverId.length + 2));
+        const result = await mcp.callTool(name, body.arguments || {});
+        log('INFO', 'MCP 工具已执行（自动审批）：' + serverInfo.name + '/' + name.slice(serverId.length + 2));
         sendJSON(response, 200, { ok: true, result });
+      } catch (error) {
+        sendJSON(response, 400, { error: { message: error.message } });
+      }
+      return true;
+    }
+
+    const mcpApprovalMatch = pathname.match(/^\\/api\\/mcp\\/approvals\\/([a-f0-9]{48})$/);
+    if (mcpApprovalMatch && request.method === 'POST') {
+      const approvalId = mcpApprovalMatch[1];
+      const pending = mcpApprovals.get(approvalId);
+      if (!pending) {
+        sendJSON(response, 404, { error: { message: '审批请求不存在、已处理或已过期。', code: 'approval_not_found' } });
+        return true;
+      }
+      mcpApprovals.delete(approvalId);
+      if (pending.expiresAt <= Date.now()) {
+        sendJSON(response, 410, { error: { message: '审批请求已过期，请重新发起工具调用。', code: 'approval_expired' } });
+        return true;
+      }
+      if (pending.remoteAddress !== (request.socket.remoteAddress || 'unknown')) {
+        sendJSON(response, 403, { error: { message: '审批请求与当前客户端不匹配。' } });
+        return true;
+      }
+      const decision = await readJSON(request, 1024);
+      if (decision.approved !== true) {
+        log('INFO', 'MCP 工具调用已被用户拒绝：' + pending.serverId + '/' + pending.name);
+        sendJSON(response, 200, { ok: true, approved: false });
+        return true;
+      }
+      try {
+        const serverInfo = mcp.get(pending.serverId);
+        if (!serverInfo || !serverInfo.enabled || serverInfo.approval === 'auto') {
+          throw new Error('MCP 服务状态或审批策略已改变，请重新发起调用。');
+        }
+        const result = await mcp.callTool(pending.name, pending.arguments);
+        log('INFO', 'MCP 工具已执行（用户逐次审批）：' + serverInfo.name + '/' + pending.name.slice(pending.serverId.length + 2));
+        sendJSON(response, 200, { ok: true, approved: true, result });
       } catch (error) {
         sendJSON(response, 400, { error: { message: error.message } });
       }
