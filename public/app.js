@@ -822,10 +822,10 @@ async function sendMessage(event) {
           } catch (error) {
             if (!error.approvalId) throw error;
             const approved = window.confirm(
-              '模型请求调用一个需要确认的 MCP 工具：\\n\\n'
+              '模型请求调用一个需要确认的 MCP 工具：\n\n'
               + registered.serverName + ' / ' + registered.originalName
-              + '\\n\\n参数：\\n' + JSON.stringify(args, null, 2)
-              + '\\n\\n仅在确认工具和参数可信时允许执行。'
+              + '\n\n参数：\n' + JSON.stringify(args, null, 2)
+              + '\n\n仅在确认工具和参数可信时允许执行。'
             );
             const decision = await api('/api/mcp/approvals/' + encodeURIComponent(error.approvalId), {
               method: 'POST',
