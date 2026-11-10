@@ -12,6 +12,7 @@ async function main() {
   process.env.NODE_AI_WEB_ALLOW_PRIVATE_UPSTREAM = 'true';
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'node-ai-mcp-test-'));
   const requests = [];
+  const diagnostics = [];
   const server = http.createServer((req, res) => {
     let body = '';
     req.setEncoding('utf8');
@@ -70,9 +71,11 @@ async function main() {
       }
     }));
 
-    const manager = createMCPManager(root, () => {});
+    const manager = createMCPManager(root, (level, message) => {
+      diagnostics.push(level + ': ' + message);
+    });
     const tools = await manager.listTools();
-    assert.strictEqual(tools.length, 1, 'tool discovery should return one tool');
+    assert.strictEqual(tools.length, 1, 'tool discovery should return one tool. Diagnostics: ' + diagnostics.join(' | '));
     assert.strictEqual(tools[0].function.name, 'mcd_mcp_server__hello');
 
     const result = await manager.callTool(tools[0].function.name, {});
