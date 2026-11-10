@@ -2006,3 +2006,33 @@ html body .chat-scroll > .welcome-modern .setup-foot {
   max-width: 720px;
   margin: 0 auto;
 }
+
+
+/* Android-style settings home and on-demand runtime diagnostics. */
+.settings-hub-modal { width: min(620px, calc(100vw - 28px)); }
+.settings-category-list { display: grid; gap: 8px; }
+.settings-category {
+  display: grid; grid-template-columns: 42px minmax(0, 1fr) 18px; align-items: center;
+  gap: 12px; width: 100%; min-height: 74px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2);
+  color: var(--ink); text-align: left; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.settings-category:hover { border-color: var(--accent); background: var(--panel); }
+.settings-category-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: var(--panel); font-size: 19px; }
+.settings-category > span:nth-child(2) { display: grid; gap: 4px; min-width: 0; }
+.settings-category strong { font-size: 14px; font-weight: 650; }
+.settings-category small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.settings-category-arrow { color: var(--muted); font-size: 25px; line-height: 1; }
+.runtime-modal { width: min(620px, calc(100vw - 28px)); }
+.runtime-status-list { display: grid; gap: 0; }
+.runtime-status-list > div { display: grid; grid-template-columns: minmax(110px, .7fr) minmax(0, 1.3fr); gap: 6px 14px; padding: 14px 2px; border-bottom: 1px solid var(--line); }
+.runtime-status-list > div:last-child { border-bottom: 0; }
+.runtime-status-list span { color: var(--muted); font-size: 13px; }
+.runtime-status-list strong { min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; text-align: right; }
+.runtime-status-list small { grid-column: 2; color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .settings-category { grid-template-columns: 38px minmax(0, 1fr) 16px; padding: 10px; }
+  .settings-category-icon { width: 36px; height: 36px; }
+  .runtime-status-list > div { grid-template-columns: 1fr; }
+  .runtime-status-list strong, .runtime-status-list small { text-align: left; grid-column: 1; }
+}
