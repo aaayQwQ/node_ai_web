@@ -480,7 +480,7 @@ async function loadModels() {
   const enabled = Array.isArray(state.config.selectedModels)
     ? state.config.selectedModels.filter(item => item && item.enabled !== false)
     : [];
-  select.replaceChildren(new Option('选择已启用的模型', ''));
+  select.replaceChildren(new Option('选择模型', ''));
   for (const item of enabled) {
     const provider = providers.find(entry => entry.id === item.providerId && entry.baseURL && entry.apiKeySet);
     if (!provider || !item.modelId) continue;
