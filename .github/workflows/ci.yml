@@ -23,5 +23,7 @@ jobs:
         run: node tests/base-url.test.js
       - name: SSRF address tests
         run: node tests/security.test.js
+      - name: Configuration encryption tests
+        run: node tests/config-security.test.js
       - name: MCP Streamable HTTP tests
         run: node tests/mcp-streamable-http.test.js
