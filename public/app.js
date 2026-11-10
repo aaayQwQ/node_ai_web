@@ -204,8 +204,6 @@ function parseJSONArray(value, label) {
 function openGeneralSettings() {
   $('settingsResult').textContent = '';
   $('settings').showModal();
-  const key = $('apiKey');
-  if (key && !state.config.apiKeySet) key.focus();
 }
 
 function openSettingsHub() {
@@ -502,19 +500,12 @@ function setConnectionStatus(message, status) {
 async function loadSettings() {
   try {
     state.config = await api('/api/config');
-    $('baseURL').value = state.config.baseURL || '';
-    $('apiKey').value = '';
-    $('apiKey').placeholder = state.config.apiKeySet
-      ? '已保存密钥（留空则保留）'
-      : '粘贴 API Key';
-    $('model').value = state.config.model || '';
     $('systemPrompt').value = state.config.systemPrompt || '';
     $('temperature').value = state.config.temperature ?? 0.7;
     $('topP').value = state.config.topP ?? 1;
     $('maxTokens').value = state.config.maxTokens ?? 4096;
     $('contextWindow').value = state.config.contextWindow ?? 20;
     $('mcpAutoApprove').checked = state.config.mcpAutoApprove === true;
-    $('customHeaders').value = JSON.stringify(state.config.customHeaders || {}, null, 2);
     $('webPassword').value = '';
     $('webPassword').placeholder = '留空则保留当前密码';
     setConnectionStatus('本地服务已就绪', 'online');
@@ -879,9 +870,6 @@ async function saveSettings() {
   let body;
   try {
   body = {
-    baseURL: $('baseURL').value.trim(),
-    apiKey: $('apiKey').value.trim(),
-    model: $('model').value.trim(),
     providers: Array.isArray(state.config.providers) ? state.config.providers : [],
     selectedModels: Array.isArray(state.config.selectedModels) ? state.config.selectedModels : [],
     systemPrompt: $('systemPrompt').value,
@@ -890,7 +878,6 @@ async function saveSettings() {
     maxTokens: Number($('maxTokens').value),
     contextWindow: Number($('contextWindow').value),
     mcpAutoApprove: $('mcpAutoApprove').checked,
-    customHeaders: parseJSONField($('customHeaders').value, '自定义请求头'),
     webPassword: $('webPassword').value
   };
   } catch (error) {
@@ -912,18 +899,13 @@ async function saveSettings() {
       localStorage.setItem('node-ai-web-password', state.auth);
     }
 
-    $('apiKey').value = '';
     $('webPassword').value = '';
     await loadSettings();
     await loadModels();
     $('settingsResult').textContent = '设置已保存。';
-    const ready = Boolean((state.config.baseURL && state.config.apiKeySet) || (state.config.providers || []).some(provider => provider.baseURL && provider.apiKeySet));
-    if (ready) {
-      showToast('连接配置已保存，可以开始对话。', 'success');
-      $('settings').close();
-    } else {
-      showToast('已保存；请确认 Base URL 和 API Key 均已填写。', 'warning');
-    }
+    showToast('通用设置已保存。', 'success');
+    $('settings').close();
+    openSettingsHub();
     renderMessages();
   } catch (error) {
     $('settingsResult').textContent = '保存失败：' + error.message;
@@ -931,25 +913,7 @@ async function saveSettings() {
 }
 
 async function testConnection() {
-  const output = $('settingsResult');
-  output.textContent = '正在测试连接…';
-
-  try {
-    const result = await api('/api/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        baseURL: $('baseURL').value.trim(),
-        apiKey: $('apiKey').value.trim(),
-        customHeaders: parseJSONField($('customHeaders').value, '自定义请求头')
-      })
-    });
-
-    output.textContent = '连接成功 · ' + result.rtt + ' ms · '
-      + result.count + ' 个模型\n' + result.url;
-  } catch (error) {
-    output.textContent = '连接失败：' + error.message;
-  }
+  showToast('请在“设置 → 服务商与模型”中测试具体服务商连接。', 'info');
 }
 
 async function openPlugins() {
@@ -1204,12 +1168,12 @@ function resetProviderForm() {
   $('providerBaseURL').value = '';
   $('providerApiKey').value = '';
   $('providerApiKey').placeholder = '粘贴 API Key';
-  $('providerDefaultModel').value = '';
   $('providerHeaders').value = '{}';
   $('providerEditorTitle').textContent = '添加服务商';
   $('providerResult').textContent = '';
   $('providerModels').replaceChildren();
-  $('providerModelCount').textContent = '尚未读取';
+  $('providerManualModel').value = '';
+  $('providerModelCount').textContent = '尚未添加';
 }
 function editProvider(provider) {
   $('providerId').value = provider.id;
@@ -1217,12 +1181,14 @@ function editProvider(provider) {
   $('providerBaseURL').value = provider.baseURL || '';
   $('providerApiKey').value = '';
   $('providerApiKey').placeholder = provider.apiKeySet ? '密钥已保存；留空保留现有密钥' : '粘贴 API Key';
-  $('providerDefaultModel').value = provider.model || '';
   $('providerHeaders').value = JSON.stringify(provider.customHeaders || {}, null, 2);
   $('providerEditorTitle').textContent = '编辑服务商：' + (provider.name || '');
   $('providerResult').textContent = '';
   $('providerModels').replaceChildren();
-  $('providerModelCount').textContent = '点击“读取模型”加载列表';
+  $('providerManualModel').value = '';
+  const savedModels = (state.config.selectedModels || []).filter(item => item.providerId === provider.id && item.enabled !== false);
+  for (const item of savedModels) addProviderModelOption(item.modelId, true);
+  updateProviderModelCount();
   showProviderEditor();
 }
 function renderProviders() {
@@ -1274,6 +1240,46 @@ async function openProviders() {
   showProviderList();
   $('providersDialog').showModal();
 }
+function addProviderModelOption(modelId, checked = true) {
+  const id = String(modelId || '').trim();
+  if (!id) return false;
+  const holder = $('providerModels');
+  const existing = Array.from(holder.querySelectorAll('input[type="checkbox"]')).find(input => input.value === id);
+  if (existing) {
+    if (checked) existing.checked = true;
+    return false;
+  }
+  const label = document.createElement('label');
+  label.className = 'provider-model-option';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.value = id;
+  checkbox.checked = Boolean(checked);
+  const name = document.createElement('span');
+  name.textContent = id;
+  label.append(checkbox, name);
+  holder.appendChild(label);
+  return true;
+}
+function updateProviderModelCount() {
+  const count = $('providerModels').querySelectorAll('input[type="checkbox"]').length;
+  $('providerModelCount').textContent = count + ' 个模型';
+}
+function addManualProviderModel() {
+  const input = $('providerManualModel');
+  const id = input.value.trim();
+  if (!id) {
+    $('providerResult').textContent = '请先输入模型 ID。';
+    input.focus();
+    return;
+  }
+  const added = addProviderModelOption(id, true);
+  input.value = '';
+  updateProviderModelCount();
+  $('providerResult').textContent = added ? '已添加模型，并默认勾选。' : '该模型已存在，已确保勾选。';
+  input.focus();
+}
+
 async function readProviderModels() {
   const output = $('providerResult');
   output.textContent = '正在读取模型列表…';
@@ -1298,22 +1304,12 @@ async function readProviderModels() {
     state.providerModels = models.map(item => item.id);
     const selected = (state.config.selectedModels || []).filter(item => item.providerId === id && item.enabled !== false);
     const selectedSet = new Set(selected.map(item => item.modelId));
-    const holder = $('providerModels');
-    holder.replaceChildren();
+    const currentlyChecked = new Set(Array.from($('providerModels').querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value));
     for (const model of models) {
-      const label = document.createElement('label');
-      label.className = 'provider-model-option';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.value = model.id;
-      checkbox.checked = selectedSet.has(model.id);
-      const name = document.createElement('span');
-      name.textContent = model.id;
-      label.append(checkbox, name);
-      holder.appendChild(label);
+      addProviderModelOption(model.id, selectedSet.has(model.id) || currentlyChecked.has(model.id));
     }
-    $('providerModelCount').textContent = '读取到 ' + models.length + ' 个模型';
-    output.textContent = '读取成功 · ' + result.rtt + ' ms。模型不会自动加入聊天列表，请勾选后保存。';
+    updateProviderModelCount();
+    output.textContent = '在线获取成功 · ' + result.rtt + ' ms。勾选模型后保存，即可加入聊天框；也可以手动添加其他模型 ID。';
   } catch (error) {
     $('providerResult').textContent = '读取失败：' + error.message;
   }
@@ -1327,7 +1323,6 @@ async function saveProvider() {
       name: $('providerName').value.trim(),
       baseURL: $('providerBaseURL').value.trim(),
       apiKey: $('providerApiKey').value.trim(),
-      model: $('providerDefaultModel').value.trim(),
       customHeaders: parseJSONField($('providerHeaders').value, '自定义请求头')
     };
     if (!provider.name || !provider.baseURL) throw new Error('服务商名称和 Base URL 必填。');
@@ -1401,6 +1396,14 @@ $('mcpType').addEventListener('change', updateMCPTypeFields);
 $('mcpAddTop').addEventListener('click', () => { resetMCPForm(); showMCPEditor(); $('mcpName').focus(); });
 $('mcpBack').addEventListener('click', showMCPList);
 $('providerBack').addEventListener('click', showProviderList);
+$('providerAddManualModel').addEventListener('click', addManualProviderModel);
+$('providerManualModel').addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    addManualProviderModel();
+  }
+});
+
 $('providerAddTop').addEventListener('click', () => { resetProviderForm(); showProviderEditor(); $('providerName').focus(); });
 $('providerReset').addEventListener('click', resetProviderForm);
 $('providerSave').addEventListener('click', saveProvider);
@@ -1408,6 +1411,16 @@ $('providerTest').addEventListener('click', readProviderModels);
 $('saveSelectedModels').addEventListener('click', saveSelectedProviderModels);
 $('mcpReset').addEventListener('click', resetMCPForm);
 $('mcpSave').addEventListener('click', saveMCPServer);
+function returnToSettingsHub(dialogId) {
+  const dialog = $(dialogId);
+  if (dialog && dialog.open) dialog.close();
+  $('settingsHub').showModal();
+}
+$('providersSettingsBack').addEventListener('click', () => returnToSettingsHub('providersDialog'));
+$('generalBack').addEventListener('click', () => returnToSettingsHub('settings'));
+$('runtimeBack').addEventListener('click', () => returnToSettingsHub('runtimeStatus'));
+$('mcpSettingsBack').addEventListener('click', () => returnToSettingsHub('mcpManager'));
+
 $('settingsCategoryProviders').addEventListener('click', () => { $('settingsHub').close(); openProviders(); });
 $('settingsCategoryGeneral').addEventListener('click', () => { $('settingsHub').close(); openGeneralSettings(); });
 $('settingsCategoryRuntime').addEventListener('click', () => { $('settingsHub').close(); openRuntimeStatus(); });
@@ -1443,28 +1456,8 @@ $('thinkingBtn').addEventListener('click', () => {
 $('attachBtn').addEventListener('click', () => {
   showToast('附件上传暂未接入；此按钮目前保留为工具入口。', 'info');
 });
-$('providerPreset').addEventListener('change', () => {
-  const presets = {
-    custom: { url: '', model: '' },
-    openai: { url: 'https://api.openai.com/v1', model: 'gpt-4.1-mini' },
-    deepseek: { url: 'https://api.deepseek.com', model: 'deepseek-chat' },
-    anthropic: { url: 'https://api.anthropic.com/v1', model: 'claude-3-5-sonnet-latest' },
-    openrouter: { url: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
-    siliconflow: { url: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-V3' },
-    ollama: { url: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' }
-  };
-  const preset = presets[$('providerPreset').value];
-  if (!preset) return;
-  if (preset.url) $('baseURL').value = preset.url;
-  if (preset.model) $('model').value = preset.model;
-  showToast('已填入预设地址和模型；请检查后保存。', 'info');
-});
+
 $('saveSettings').addEventListener('click', saveSettings);
-$('testConnection').addEventListener('click', testConnection);
-$('refreshModels').addEventListener('click', async () => {
-  await loadModels();
-  $('settingsResult').textContent = '已尝试读取模型列表。';
-});
 document.querySelectorAll('.close-modal').forEach(button => {
   button.addEventListener('click', () => button.closest('dialog').close());
 });
