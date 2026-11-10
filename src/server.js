@@ -121,11 +121,11 @@ function start(root) {
         apiKeySet: Boolean(provider.apiKey),
         apiKeyHint: provider.apiKey ? '••••••••' + provider.apiKey.slice(-4) : '',
         customHeaders: Object.fromEntries(Object.entries(provider.customHeaders || {}).map(([key, value]) => [
-          key, /authorization|auth|token|secret|api[-_]?key/i.test(key) ? '••••••••' : value
+          key, /authorization|auth|token|secret|password|api[-_]?key/i.test(key) ? '••••••••' : value
         ]))
       })),
       customHeaders: Object.fromEntries(Object.entries(currentConfig.customHeaders || {}).map(([key, value]) => [
-        key, /authorization|auth|token|secret|api[-_]?key/i.test(key) ? '••••••••' : value
+        key, /authorization|auth|token|secret|password|api[-_]?key/i.test(key) ? '••••••••' : value
       ])),
       apiKeySet: Boolean(currentConfig.apiKey),
       apiKeyHint: currentConfig.apiKey
