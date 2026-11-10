@@ -10,6 +10,8 @@ module.exports = function createConfigManager(root) {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   }
 
+  let writeQueue = Promise.resolve();
+
   function write(value) {
     const current = read();
     const next = Object.assign({}, current, value);
@@ -52,7 +54,13 @@ module.exports = function createConfigManager(root) {
       ? next.enabledPlugins.filter(item => typeof item === 'string')
       : [];
 
-    fs.writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
+    const directory = path.dirname(file);
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const temporary = file + '.tmp-' + process.pid;
+    fs.writeFileSync(temporary, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
+    try { fs.chmodSync(temporary, 0o600); } catch (_) {}
+    fs.renameSync(temporary, file);
+    try { fs.chmodSync(file, 0o600); } catch (_) {}
     return next;
   }
 
