@@ -41,14 +41,14 @@ async function api(path, options = {}) {
 
   if (!response.ok) {
     let message = await response.text();
-
-    try {
-      const data = JSON.parse(message);
-      message = data.error && data.error.message
-        ? data.error.message
-        : message;
-    } catch (_) {}
-
+    let data = null;
+    try { data = JSON.parse(message); } catch (_) {}
+    if (data && data.error && data.error.code === 'approval_required' && data.error.approval_id) {
+      const approvalError = new Error(data.error.message || '需要确认 MCP 工具调用。');
+      approvalError.approvalId = data.error.approval_id;
+      throw approvalError;
+    }
+    if (data && data.error && data.error.message) message = data.error.message;
     throw new Error(message || ('HTTP ' + response.status));
   }
 
@@ -804,21 +804,40 @@ async function sendMessage(event) {
         try {
           const registered = toolLookup.get(call.function.name);
           if (!registered) throw new Error('Requested tool is not registered.');
-          if (!state.config.mcpAutoApprove && registered.approval !== 'auto' && !window.confirm('允许调用 MCP 工具？\n' + registered.serverName + ' / ' + registered.originalName + '\n参数：\n' + call.function.arguments)) {
-            return { role: 'tool', tool_call_id: call.id, content: 'Tool execution was declined by the user.' };
-          }
           if (state.controller.signal.aborted) {
             const abortError = new Error('Generation stopped.');
             abortError.name = 'AbortError';
             throw abortError;
           }
           const args = JSON.parse(call.function.arguments || '{}');
-          const result = await api('/api/mcp/call', {
+          const callOptions = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: state.controller.signal,
             body: JSON.stringify({ name: call.function.name, arguments: args })
-          });
+          };
+          let result;
+          try {
+            result = await api('/api/mcp/call', callOptions);
+          } catch (error) {
+            if (!error.approvalId) throw error;
+            const approved = window.confirm(
+              '模型请求调用一个需要确认的 MCP 工具：\\n\\n'
+              + registered.serverName + ' / ' + registered.originalName
+              + '\\n\\n参数：\\n' + JSON.stringify(args, null, 2)
+              + '\\n\\n仅在确认工具和参数可信时允许执行。'
+            );
+            const decision = await api('/api/mcp/approvals/' + encodeURIComponent(error.approvalId), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: state.controller.signal,
+              body: JSON.stringify({ approved })
+            });
+            if (!approved || decision.approved === false) {
+              return { role: 'tool', tool_call_id: call.id, content: 'Tool execution was declined by the user.' };
+            }
+            result = decision;
+          }
           return { role: 'tool', tool_call_id: call.id, content: JSON.stringify(result.result) };
         } catch (error) {
           if (error.name === 'AbortError') throw error;
