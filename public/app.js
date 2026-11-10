@@ -302,12 +302,25 @@ function renderHistory() {
       closeSidebarOnMobile();
     });
 
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'history-more';
+    more.textContent = '⋮';
+    more.title = '对话菜单';
+    more.setAttribute('aria-label', '对话菜单');
+    more.setAttribute('aria-haspopup', 'menu');
+    more.setAttribute('aria-expanded', 'false');
+
+    const menu = document.createElement('div');
+    menu.className = 'history-menu';
+    menu.setAttribute('role', 'menu');
+    menu.hidden = true;
+
     const rename = document.createElement('button');
     rename.type = 'button';
-    rename.className = 'history-action';
-    rename.textContent = '改名';
-    rename.title = '重命名对话';
-    rename.setAttribute('aria-label', '重命名对话');
+    rename.className = 'history-menu-item';
+    rename.textContent = '重命名';
+    rename.setAttribute('role', 'menuitem');
     rename.addEventListener('click', event => {
       event.stopPropagation();
       const title = window.prompt('重命名对话', chat.title || '新对话');
@@ -320,33 +333,44 @@ function renderHistory() {
 
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'history-action history-delete';
+    remove.className = 'history-menu-item history-menu-delete';
     remove.textContent = '删除';
-    remove.title = '删除对话';
-    remove.setAttribute('aria-label', '删除对话');
+    remove.setAttribute('role', 'menuitem');
     remove.addEventListener('click', event => {
       event.stopPropagation();
       if (!window.confirm('确定删除对话“' + (chat.title || '新对话') + '”？此操作不可撤销。')) return;
-      const index = state.chats.findIndex(item => item.id === chat.id);
+      const index = state.chats.findIndex(entry => entry.id === chat.id);
       if (index >= 0) state.chats.splice(index, 1);
       if (state.activeChatId === chat.id) {
+        if (state.controller) state.controller.abort();
+        state.activeChatId = null;
+        state.thinking = false;
         const next = state.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        state.activeChatId = next ? next.id : null;
-        state.thinking = next ? Boolean(next.thinking) : false;
+        if (next) {
+          state.activeChatId = next.id;
+          state.thinking = Boolean(next.thinking);
+        }
+        updateThinkingButton();
       }
       saveHistory();
       renderHistory();
       renderMessages();
     });
 
-    const actions = document.createElement('div');
-    actions.className = 'history-actions';
-    actions.append(rename, remove);
-    item.append(open, actions);
+    menu.append(rename, remove);
+    more.addEventListener('click', event => {
+      event.stopPropagation();
+      const shouldOpen = menu.hidden;
+      list.querySelectorAll('.history-menu').forEach(other => { other.hidden = true; });
+      list.querySelectorAll('.history-more').forEach(button => button.setAttribute('aria-expanded', 'false'));
+      menu.hidden = !shouldOpen;
+      more.setAttribute('aria-expanded', String(shouldOpen));
+    });
+
+    item.append(open, more, menu);
     list.appendChild(item);
   }
 }
-
 function getWelcomeCopy() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 11) {
@@ -1340,6 +1364,17 @@ function closeSidebarOnMobile() {
     document.body.classList.remove('sidebar-open');
   }
 }
+
+document.addEventListener('click', event => {
+  if (event.target.closest('.history-item')) return;
+  document.querySelectorAll('.history-menu').forEach(menu => { menu.hidden = true; });
+  document.querySelectorAll('.history-more').forEach(button => button.setAttribute('aria-expanded', 'false'));
+});
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  document.querySelectorAll('.history-menu').forEach(menu => { menu.hidden = true; });
+  document.querySelectorAll('.history-more').forEach(button => button.setAttribute('aria-expanded', 'false'));
+});
 
 $('newChat').addEventListener('click', () => {
   createChat();
