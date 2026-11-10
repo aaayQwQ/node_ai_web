@@ -61,6 +61,13 @@ module.exports = function createMCPManager(root, log) {
     fs.renameSync(temporary, file);
   }
 
+  function stdioAllowed(command) {
+    if (process.env.NODE_AI_WEB_ALLOW_STDIO_MCP !== 'true') return false;
+    const allowed = String(process.env.NODE_AI_WEB_STDIO_ALLOWLIST || '').split(',').map(x => x.trim()).filter(Boolean);
+    const executable = path.basename(String(command || '')).toLowerCase();
+    return allowed.some(item => path.basename(item).toLowerCase() === executable);
+  }
+
   function normalize(input, existing) {
     const value = Object.assign({}, existing || {}, input || {});
     value.id = String(value.id || ('mcp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7)));
@@ -82,6 +89,7 @@ module.exports = function createMCPManager(root, log) {
       value.env = value.env && typeof value.env === 'object' && !Array.isArray(value.env) ? value.env : {};
       if (!value.command) throw new Error('Stdio 服务必须填写 Command。');
       if (/[\r\n\0]/.test(value.command)) throw new Error('Command 含有非法字符。');
+      if (!stdioAllowed(value.command)) throw new Error('Stdio MCP 默认禁用。需设置 NODE_AI_WEB_ALLOW_STDIO_MCP=true，并将可执行文件加入 NODE_AI_WEB_STDIO_ALLOWLIST。');
     } else {
       value.url = String(value.url || '').trim();
       if (!value.url) throw new Error('HTTP/SSE 服务必须填写 Endpoint URL。');
@@ -295,12 +303,19 @@ module.exports = function createMCPManager(root, log) {
 
   function stdioCall(server, method, params) {
     return new Promise((resolve, reject) => {
-      const env = Object.assign({}, process.env);
+      if (!stdioAllowed(server.command)) {
+        reject(new Error('Stdio MCP 未获服务端允许。请显式启用并配置命令白名单。'));
+        return;
+      }
+      const env = {};
+      ['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP'].forEach(key => {
+        if (process.env[key]) env[key] = process.env[key];
+      });
       for (const [key, value] of Object.entries(server.env || {})) {
         if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof value === 'string') env[key] = value;
       }
       const child = spawn(server.command, server.args || [], {
-        env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true
+        env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: false
       });
       const id = ++nextId;
       let buffer = '';
