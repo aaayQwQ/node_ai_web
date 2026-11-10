@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 
 const state = {
   config: {},
+  connectionStatus: { message: '正在连接', kind: 'offline' },
   chats: [],
   activeChatId: null,
   controller: null,
@@ -200,11 +201,36 @@ function parseJSONArray(value, label) {
   }
 }
 
-function openSettings() {
+function openGeneralSettings() {
   $('settingsResult').textContent = '';
   $('settings').showModal();
   const key = $('apiKey');
   if (key && !state.config.apiKeySet) key.focus();
+}
+
+function openSettingsHub() {
+  $('settingsHub').showModal();
+  closeSidebarOnMobile();
+}
+
+async function openRuntimeStatus() {
+  const providerCount = (state.config.providers || []).filter(item => item && item.baseURL && item.apiKeySet).length;
+  const modelCount = (state.config.selectedModels || []).filter(item => item && item.enabled !== false).length;
+  const selected = $('modelSelect').selectedOptions[0]?.textContent || '尚未选择';
+  $('runtimeLocal').textContent = state.connectionStatus.kind === 'offline' ? '连接异常' : '本地服务已连接';
+  $('runtimeLocalDetail').textContent = state.connectionStatus.message || '等待状态更新';
+  $('runtimeApi').textContent = providerCount ? providerCount + ' 个已配置服务商' : (state.config.baseURL && state.config.apiKeySet ? '默认 API 已配置' : '尚未配置 API');
+  $('runtimeModels').textContent = modelCount + ' 个已启用模型';
+  $('runtimeSelectedModel').textContent = selected;
+  $('runtimeMcp').textContent = '正在读取…';
+  $('runtimeUpdated').textContent = new Date().toLocaleString();
+  $('runtimeStatus').showModal();
+  try {
+    const servers = await api('/api/mcp/servers');
+    $('runtimeMcp').textContent = Array.isArray(servers) ? servers.filter(item => item && item.enabled).length + ' 个已启用服务' : '暂不可用';
+  } catch (error) {
+    $('runtimeMcp').textContent = '读取失败：' + error.message;
+  }
 }
 
 let toastTimer;
@@ -439,9 +465,14 @@ function renderMessages() {
 }
 
 function setConnectionStatus(message, status) {
-  $('status').textContent = message;
-  $('connectionDot').classList.toggle('online', status === 'online');
-  $('connectionDot').classList.toggle('offline', status === 'offline');
+  state.connectionStatus = { message, kind: status };
+  const label = $('status');
+  const dot = $('connectionDot');
+  if (label) label.textContent = message;
+  if (dot) {
+    dot.classList.toggle('online', status === 'online');
+    dot.classList.toggle('offline', status === 'offline');
+  }
 }
 
 async function loadSettings() {
@@ -1330,7 +1361,7 @@ $('prompt').addEventListener('input', event => {
   $('composer').classList.toggle('composer-has-text', Boolean(event.target.value.trim()));
 });
 
-$('settingsBtn').addEventListener('click', openProviders);
+$('settingsBtn').addEventListener('click', openSettingsHub);
 $('pluginsBtn').addEventListener('click', openMCPManager);
 $('mcpType').addEventListener('change', updateMCPTypeFields);
 $('mcpAddTop').addEventListener('click', () => { resetMCPForm(); showMCPEditor(); $('mcpName').focus(); });
@@ -1344,16 +1375,16 @@ $('providerTest').addEventListener('click', readProviderModels);
 $('saveSelectedModels').addEventListener('click', saveSelectedProviderModels);
 $('mcpReset').addEventListener('click', resetMCPForm);
 $('mcpSave').addEventListener('click', saveMCPServer);
-$('statusBtn').addEventListener('click', openSettings);
+$('settingsCategoryProviders').addEventListener('click', () => { $('settingsHub').close(); openProviders(); });
+$('settingsCategoryGeneral').addEventListener('click', () => { $('settingsHub').close(); openGeneralSettings(); });
+$('settingsCategoryRuntime').addEventListener('click', () => { $('settingsHub').close(); openRuntimeStatus(); });
+$('settingsCategoryMCP').addEventListener('click', () => { $('settingsHub').close(); openMCPManager(); });
 $('themeBtn').addEventListener('click', () => {
   document.body.classList.toggle('light');
   localStorage.setItem(
     'node-ai-web-theme',
     document.body.classList.contains('light') ? 'light' : 'dark'
   );
-});
-$('collapseSidebar').addEventListener('click', () => {
-  document.body.classList.toggle('sidebar-collapsed');
 });
 $('mobileMenu').addEventListener('click', () => {
   document.body.classList.toggle('sidebar-open');
