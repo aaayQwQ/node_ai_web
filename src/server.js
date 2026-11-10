@@ -454,16 +454,9 @@ function start(root) {
         return true;
       }
 
-      if (!currentConfig.baseURL || !currentConfig.apiKey) {
-        sendJSON(response, 400, {
-          error: { message: '请先在设置中填写 Base URL 和 API Key。' }
-        });
-        return true;
-      }
-
       const input = await readJSON(request);
       let chatConfig = currentConfig;
-      let requestedModel = input.model;
+      const requestedModel = input.model;
       if (typeof requestedModel === 'string' && requestedModel.includes('::')) {
         const splitAt = requestedModel.indexOf('::');
         const providerId = requestedModel.slice(0, splitAt);
@@ -480,6 +473,11 @@ function start(root) {
           customHeaders: provider.customHeaders || {}
         });
         input.model = modelId;
+      } else if (!chatConfig.baseURL || !chatConfig.apiKey) {
+        sendJSON(response, 400, {
+          error: { message: '请先选择已配置的服务商模型，或在设置中填写默认 Base URL 和 API Key。' }
+        });
+        return true;
       }
       const payload = Object.assign({
         model: chatConfig.model,
