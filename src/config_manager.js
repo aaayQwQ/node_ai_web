@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
 
 module.exports = function createConfigManager(root) {
   const file = path.join(root, 'config', 'config.json');
@@ -57,7 +59,9 @@ module.exports = function createConfigManager(root) {
     const directory = path.dirname(file);
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     const temporary = file + '.tmp-' + process.pid;
-    fs.writeFileSync(temporary, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
+    const stored = transformSecrets(next, encryptValue, masterKey());
+    stored.secretsEncrypted = true;
+    fs.writeFileSync(temporary, JSON.stringify(stored, null, 2) + '\n', { mode: 0o600 });
     try { fs.chmodSync(temporary, 0o600); } catch (_) {}
     fs.renameSync(temporary, file);
     try { fs.chmodSync(file, 0o600); } catch (_) {}
