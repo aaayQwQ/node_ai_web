@@ -2140,3 +2140,16 @@ html body .chat-scroll > .welcome-modern .setup-foot {
   .provider-online-model-row button { width: 100%; }
   .modal-header-actions .settings-back { min-height: 34px; padding: 6px 8px; }
 }
+
+
+/* Structured code blocks: keep the language label separate from source code. */
+.markdown-code-block { margin: 16px 0; overflow: hidden; border: 1px solid var(--line-strong); background: #191a18; }
+.markdown-code-block .code-toolbar { display:flex; align-items:center; justify-content:space-between; min-height:34px; padding:0 10px 0 13px; border-bottom:1px solid #44453e; background:#22231f; }
+.markdown-code-block .code-language { color:#c4c3b9; font:10px var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+.markdown-code-block .copy-code { position:static; padding:3px 8px; border:1px solid #55564e; background:transparent; color:#f0eee6; font:10px var(--mono); cursor:pointer; }
+.bubble .markdown-code-block pre { margin:0; padding:13px 15px 15px; border:0; background:transparent; }
+.bubble .markdown-code-block pre::before { content:none; }
+.bubble .markdown-code-block pre code { display:block; min-width:max-content; white-space:pre; font:12px/1.75 var(--mono); }
+.thinking-level { min-height:35px; max-width:82px; padding:0 6px; border:1px solid var(--line-strong); border-radius:0; background:var(--panel); color:var(--ink); font-size:10px; }
+.thinking-level:disabled { opacity:.48; cursor:not-allowed; }
+@media (max-width:560px) { .composer-actions { gap:4px; } .thinking-button { gap:5px; padding:0 7px; } .thinking-level { max-width:68px; } }
