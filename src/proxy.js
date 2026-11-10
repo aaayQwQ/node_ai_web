@@ -3,6 +3,7 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const ssrf = require('./ssrf');
 
 function normalizeBaseURL(value) {
   const input = String(value || '').trim();
@@ -65,7 +66,8 @@ function request(urlValue, options, body, timeout) {
     const transport = parsed.protocol === 'http:' ? http : https;
     const requestOptions = {
       method: options.method || 'GET',
-      headers: Object.assign({}, options.headers || {})
+      headers: Object.assign({}, options.headers || {}),
+      lookup: ssrf.lookup
     };
 
     const req = transport.request(parsed, requestOptions, response => {
@@ -165,7 +167,8 @@ async function chat(config, payload, clientResponse, signal, log) {
     const transport = parsed.protocol === 'http:' ? http : https;
     const req = transport.request(parsed, {
       method: 'POST',
-      headers
+      headers,
+      lookup: ssrf.lookup
     }, upstream => {
       if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
         const chunks = [];
