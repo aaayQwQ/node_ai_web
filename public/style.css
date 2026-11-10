@@ -2036,3 +2036,5 @@ html body .chat-scroll > .welcome-modern .setup-foot {
   .runtime-status-list > div { grid-template-columns: 1fr; }
   .runtime-status-list strong, .runtime-status-list small { text-align: left; grid-column: 1; }
 }
+
+.settings-section-title { margin: 4px 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 650; }
