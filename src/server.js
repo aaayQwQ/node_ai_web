@@ -585,6 +585,33 @@ function start(root) {
   const server = http.createServer(async (request, response) => {
     request.startedAt = Date.now();
 
+    const requestHost = String(request.headers.host || '').toLowerCase();
+    let requestHostname = '';
+    try { requestHostname = new URL('http://' + requestHost).hostname.toLowerCase(); } catch (_) {}
+    const allowedHostnames = [initialConfig.host, 'localhost', '127.0.0.1', '[::1]']
+      .filter(Boolean).map(value => String(value).toLowerCase());
+    if (!requestHostname || allowedHostnames.indexOf(requestHostname) === -1) {
+      sendJSON(response, 421, { error: { message: '请求 Host 不受允许。' } });
+      return;
+    }
+
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+      const origin = request.headers.origin;
+      const referer = request.headers.referer;
+      const source = origin || referer;
+      if (source) {
+        try {
+          if (new URL(source).host.toLowerCase() !== requestHost) {
+            sendJSON(response, 403, { error: { message: '跨站请求已被拒绝。' } });
+            return;
+          }
+        } catch (_) {
+          sendJSON(response, 403, { error: { message: '请求来源无效。' } });
+          return;
+        }
+      }
+    }
+
     let pathname;
     try {
       pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
