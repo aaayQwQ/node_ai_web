@@ -14,6 +14,8 @@ function normalizeBaseURL(value) {
 
   const parsed = new URL(input);
 
+  if (parsed.search || parsed.hash) throw new Error('Base URL 不允许包含 query 或 fragment。');
+
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('Base URL 只支持 http:// 或 https://。');
   }
@@ -72,8 +74,15 @@ function request(urlValue, options, body, timeout) {
 
     const req = transport.request(parsed, requestOptions, response => {
       const chunks = [];
-
-      response.on('data', chunk => chunks.push(chunk));
+      let responseBytes = 0;
+      response.on('data', chunk => {
+        responseBytes += chunk.length;
+        if (responseBytes > 10 * 1024 * 1024) {
+          req.destroy(new Error('上游响应超过 10 MiB 限制。'));
+          return;
+        }
+        chunks.push(chunk);
+      });
       response.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf8');
         const statusCode = response.statusCode || 502;
@@ -188,6 +197,13 @@ async function chat(config, payload, clientResponse, signal, log) {
       }
 
       if (!payload.stream) {
+        let responseBytes = 0;
+        upstream.on('data', chunk => {
+          responseBytes += chunk.length;
+          if (responseBytes > 20 * 1024 * 1024) {
+            upstream.destroy(new Error('上游聊天响应超过 20 MiB 限制。'));
+          }
+        });
         clientResponse.writeHead(upstream.statusCode || 200, {
           'Content-Type': upstream.headers['content-type'] || 'application/json',
           'Cache-Control': 'no-store'
