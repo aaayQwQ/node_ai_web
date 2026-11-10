@@ -30,6 +30,11 @@ module.exports = function createPluginEngine(root, config, log) {
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
+    ['plugin.json', 'index.js'].forEach(name => {
+      const target = path.join(directory, name);
+      const stat = fs.lstatSync(target);
+      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('插件文件不能是符号链接。');
+    });
     return directory;
   }
 
@@ -42,7 +47,8 @@ module.exports = function createPluginEngine(root, config, log) {
     const source = fs.readFileSync(path.join(directory, 'index.js'), 'utf8');
     const dataFile = path.join(dataRoot, id + '.json');
 
-    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.mkdirSync(dataRoot, { recursive: true, mode: 0o700 });
+    try { fs.chmodSync(dataRoot, 0o700); } catch (_) {}
 
     let store = {};
     try {
@@ -55,8 +61,16 @@ module.exports = function createPluginEngine(root, config, log) {
           return store[key];
         },
         set(key, value) {
-          store[key] = value;
-          fs.writeFileSync(dataFile, JSON.stringify(store, null, 2) + '\n');
+          if (typeof key !== 'string' || !key || key.length > 128) throw new Error('插件存储键无效。');
+          const serialized = JSON.stringify(value);
+          if (typeof serialized !== 'string' || Buffer.byteLength(serialized, 'utf8') > 64 * 1024) throw new Error('单个插件存储值不得超过 64 KiB。');
+          const next = Object.assign({}, store, { [key]: value });
+          if (Buffer.byteLength(JSON.stringify(next), 'utf8') > 1024 * 1024) throw new Error('单个插件存储空间不得超过 1 MiB。');
+          const temporary = dataFile + '.tmp-' + process.pid;
+          fs.writeFileSync(temporary, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
+          try { fs.chmodSync(temporary, 0o600); } catch (_) {}
+          fs.renameSync(temporary, dataFile);
+          store = next;
         }
       },
       log(...values) {
