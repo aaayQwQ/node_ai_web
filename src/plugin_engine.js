@@ -52,6 +52,8 @@ module.exports = function createPluginEngine(root, config, log) {
 
     let store = {};
     try {
+      const dataStat = fs.lstatSync(dataFile);
+      if (!dataStat.isFile() || dataStat.isSymbolicLink()) throw new Error('插件数据文件不能是符号链接。');
       store = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
     } catch (_) {}
 
