@@ -48,21 +48,22 @@ function start(root) {
   function readJSON(request, maxBytes = 1024 * 1024) {
     return new Promise((resolve, reject) => {
       let size = 0;
+      let tooLarge = false;
       const chunks = [];
 
       request.on('data', chunk => {
         size += chunk.length;
 
         if (size > maxBytes) {
-          reject(Object.assign(new Error('请求体过大。'), { status: 413 }));
-          request.resume();
+          if (!tooLarge) reject(Object.assign(new Error('请求体过大。'), { status: 413 }));
+          tooLarge = true;
           return;
         }
-
-        chunks.push(chunk);
+        if (!tooLarge) chunks.push(chunk);
       });
 
       request.on('end', () => {
+        if (tooLarge) return;
         if (size === 0) {
           resolve({});
           return;
@@ -247,7 +248,11 @@ function start(root) {
         return true;
       }
 
-      fs.writeFileSync(historyFile, JSON.stringify(history, null, 2) + '\n');
+      const historyTemp = historyFile + '.tmp-' + process.pid;
+      fs.writeFileSync(historyTemp, JSON.stringify(history, null, 2) + '\n', { mode: 0o600 });
+      try { fs.chmodSync(historyTemp, 0o600); } catch (_) {}
+      fs.renameSync(historyTemp, historyFile);
+      try { fs.chmodSync(historyFile, 0o600); } catch (_) {}
       sendJSON(response, 200, { ok: true });
       return true;
     }
