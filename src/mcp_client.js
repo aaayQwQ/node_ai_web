@@ -108,7 +108,7 @@ module.exports = function createMCPManager(root, log) {
   function publicServer(server) {
     const copy = Object.assign({}, server);
     copy.headers = Object.keys(copy.headers || {}).reduce((result, key) => {
-      result[key] = /authorization|auth|token|secret|api[-_]?key/i.test(key) ? '••••••••' : copy.headers[key];
+      result[key] = /authorization|auth|token|secret|password|api[-_]?key/i.test(key) ? '••••••••' : copy.headers[key];
       return result;
     }, {});
     copy.env = Object.keys(copy.env || {}).reduce((result, key) => {
