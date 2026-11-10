@@ -343,7 +343,7 @@ function start(root) {
       return true;
     }
 
-    const mcpApprovalMatch = pathname.match(/^\\/api\\/mcp\\/approvals\\/([a-f0-9]{48})$/);
+    const mcpApprovalMatch = pathname.match(/^\/api\/mcp\/approvals\/([a-f0-9]{48})$/);
     if (mcpApprovalMatch && request.method === 'POST') {
       const approvalId = mcpApprovalMatch[1];
       const pending = mcpApprovals.get(approvalId);
@@ -368,7 +368,7 @@ function start(root) {
       }
       try {
         const serverInfo = mcp.get(pending.serverId);
-        if (!serverInfo || !serverInfo.enabled || serverInfo.approval === 'auto') {
+        if (!serverInfo || !serverInfo.enabled) {
           throw new Error('MCP 服务状态或审批策略已改变，请重新发起调用。');
         }
         const result = await mcp.callTool(pending.name, pending.arguments);
