@@ -9,6 +9,7 @@ const tls = require('tls');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { URL } = require('url');
+const ssrf = require('./ssrf');
 
 const PROTOCOL_VERSION = '2024-11-05';
 const TIMEOUT_MS = 120000;
@@ -211,6 +212,7 @@ module.exports = function createMCPManager(root, log) {
 
       const req = transport.request(url, {
         method: body === undefined ? 'GET' : 'POST',
+        lookup: ssrf.lookup,
         headers: Object.assign({
           Accept: 'application/json, text/event-stream'
         }, headers || {}, body === undefined ? {} : {
