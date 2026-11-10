@@ -52,9 +52,9 @@ async function main() {
       // Streamable HTTP may also return a request-scoped SSE response.
       // Send the matching JSON-RPC event but deliberately keep the stream open.
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-      res.write('event: message\\ndata: ' + JSON.stringify({
+      res.write('event: message\ndata: ' + JSON.stringify({
         jsonrpc: '2.0', id: message.id, result
-      }) + '\\n\\n');
+      }) + '\n\n');
     });
   });
 
