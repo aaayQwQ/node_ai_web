@@ -503,11 +503,27 @@ function start(root) {
         max_tokens: currentConfig.maxTokens
       }, input);
 
-      if (!Array.isArray(payload.messages)) {
+      if (!Array.isArray(payload.messages) || payload.messages.length > 200) {
         sendJSON(response, 400, {
-          error: { message: 'messages 必须是数组。' }
+          error: { message: 'messages 必须是数组，且最多包含 200 条消息。' }
         });
         return true;
+      }
+
+      const allowedRoles = ['system', 'user', 'assistant', 'tool'];
+      for (const message of payload.messages) {
+        if (!message || typeof message !== 'object' || Array.isArray(message) || !allowedRoles.includes(message.role)) {
+          sendJSON(response, 400, { error: { message: 'messages 中包含无效消息或不支持的 role。' } });
+          return true;
+        }
+        if (typeof message.content === 'string' && message.content.length > 1024 * 1024) {
+          sendJSON(response, 413, { error: { message: '单条消息内容超过 1 MiB 限制。' } });
+          return true;
+        }
+        if (message.role === 'tool' && (typeof message.tool_call_id !== 'string' || !message.tool_call_id)) {
+          sendJSON(response, 400, { error: { message: 'tool 消息必须包含 tool_call_id。' } });
+          return true;
+        }
       }
 
       if (
