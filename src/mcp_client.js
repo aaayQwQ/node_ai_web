@@ -439,6 +439,7 @@ module.exports = function createMCPManager(root, log) {
 
       const getReq = transport.request(sourceURL, {
         method: 'GET',
+        lookup: ssrf.lookup,
         headers: Object.assign({}, server.headers || {}, { Accept: 'text/event-stream', 'Cache-Control': 'no-cache' })
       }, response => {
         if ((response.statusCode || 500) < 200 || (response.statusCode || 500) >= 300) {
@@ -490,7 +491,7 @@ module.exports = function createMCPManager(root, log) {
       const key = crypto.randomBytes(16).toString('base64');
       const expectedAccept = crypto.createHash('sha1')
         .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-      const connectOptions = { host: url.hostname, port };
+      const connectOptions = { host: url.hostname, port, lookup: ssrf.lookup };
       if (secure) connectOptions.servername = url.hostname;
       const socket = secure ? tls.connect(connectOptions) : net.connect(connectOptions);
       let buffer = Buffer.alloc(0);
