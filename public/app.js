@@ -170,8 +170,8 @@ function renderMarkdown(value) {
   return blocks.join('');
 }
 function renderAssistantHTML(message) {
-  // Only render the user-facing answer. Reasoning and tool payloads remain internal.
-  return renderMarkdown(message.content || (state.controller ? '正在整理回复…' : ''))
+  // Only render user-facing answer text. No reasoning, tool status, or interim narration.
+  return (message.content ? renderMarkdown(message.content) : '')
     + (message.error ? '<div class="message-inline-error">' + escapeHTML(message.error) + '</div>' : '')
     + (message.stopped ? '<div class="message-stopped">已停止生成</div>' : '');
 }
@@ -793,7 +793,7 @@ async function sendMessage(event) {
         break;
       }
       if (finalSummaryTurn) {
-        assistant.content = '模型在总结阶段仍尝试调用工具，已停止继续调用。请根据上方已返回的工具结果继续回答。';
+        assistant.content = '本轮未能生成完整回复，请重新发送问题。';
         continueTools = false;
         break;
       }
