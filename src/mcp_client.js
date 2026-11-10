@@ -100,6 +100,7 @@ module.exports = function createMCPManager(root, log) {
         throw new Error(value.type === 'websocket' ? 'WebSocket MCP URL 必须以 ws:// 或 wss:// 开头。' : 'HTTP/SSE MCP URL 只支持 HTTP 或 HTTPS。');
       }
       if (parsed.username || parsed.password) throw new Error('请勿将账号密码写在 URL 中。');
+      if (parsed.search || parsed.hash) throw new Error('MCP Endpoint URL 不允许包含 query 或 fragment。');
     }
     return value;
   }
