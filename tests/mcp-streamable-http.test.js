@@ -8,6 +8,8 @@ const path = require('path');
 const createMCPManager = require('../src/mcp_client');
 
 async function main() {
+  const previousPrivateSetting = process.env.NODE_AI_WEB_ALLOW_PRIVATE_UPSTREAM;
+  process.env.NODE_AI_WEB_ALLOW_PRIVATE_UPSTREAM = 'true';
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'node-ai-mcp-test-'));
   const requests = [];
   const server = http.createServer((req, res) => {
@@ -88,7 +90,9 @@ async function main() {
     console.log('MCP Streamable HTTP tests passed.');
   } finally {
     await new Promise(resolve => server.close(resolve));
-    fs.rmSync(root, { recursive: true, force: true });
+    try { fs.rmdirSync(root, { recursive: true }); } catch (_) {}
+    if (previousPrivateSetting === undefined) delete process.env.NODE_AI_WEB_ALLOW_PRIVATE_UPSTREAM;
+    else process.env.NODE_AI_WEB_ALLOW_PRIVATE_UPSTREAM = previousPrivateSetting;
   }
 }
 
