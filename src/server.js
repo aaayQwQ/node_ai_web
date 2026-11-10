@@ -40,7 +40,7 @@ function start(root) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-      "Content-Security-Policy": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "Content-Security-Policy": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     });
     response.end(JSON.stringify(data));
   }
@@ -302,6 +302,9 @@ function start(root) {
         const serverId = String(body.name || '').split('__')[0];
         const serverInfo = mcp.get(serverId);
         if (!serverInfo || !serverInfo.enabled) throw new Error('MCP 服务不存在或已停用。');
+        if (process.env.NODE_AI_WEB_ALLOW_MCP_CALLS !== 'true' || !currentConfig.mcpAutoApprove || serverInfo.approval !== 'auto') {
+          throw new Error('服务端安全策略已阻止此 MCP 调用。只有设置 NODE_AI_WEB_ALLOW_MCP_CALLS=true，并同时启用全局自动调用和该服务的自动调用策略后，才允许执行。');
+        }
         const result = await mcp.callTool(body.name, body.arguments || {});
         log('INFO', 'MCP 工具已执行：' + serverInfo.name + '/' + String(body.name).slice(serverId.length + 2));
         sendJSON(response, 200, { ok: true, result });
@@ -616,7 +619,7 @@ function start(root) {
         'X-Frame-Options': 'DENY',
         'Referrer-Policy': 'no-referrer',
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-      "Content-Security-Policy": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "Content-Security-Policy": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
         'Cache-Control': path.extname(file) === '.html' ? 'no-cache' : 'public, max-age=300'
       });
       response.end(content);
