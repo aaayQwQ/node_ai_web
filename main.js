@@ -16,7 +16,8 @@ const DIRECTORIES = [
 ];
 
 for (const directory of DIRECTORIES) {
-  fs.mkdirSync(path.join(ROOT, directory), { recursive: true });
+  fs.mkdirSync(path.join(ROOT, directory), { recursive: true, mode: 0o700 });
+  try { fs.chmodSync(path.join(ROOT, directory), 0o700); } catch (_) {}
 }
 
 const configFile = path.join(ROOT, 'config', 'config.json');
@@ -37,11 +38,13 @@ if (!fs.existsSync(configFile)) {
     contextWindow: 20,
     customHeaders: {},
     enabledPlugins: ['sys-prompt-injector']
-  }, null, 2) + '\n');
+  }, null, 2) + '\n', { mode: 0o600 });
+  try { fs.chmodSync(configFile, 0o600); } catch (_) {}
 }
 
 if (!fs.existsSync(historyFile)) {
-  fs.writeFileSync(historyFile, '[]\n');
+  fs.writeFileSync(historyFile, '[]\n', { mode: 0o600 });
+  try { fs.chmodSync(historyFile, 0o600); } catch (_) {}
 }
 
 if (process.argv.includes('--check')) {
