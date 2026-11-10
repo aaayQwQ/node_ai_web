@@ -28,10 +28,14 @@ it directly to the public internet or use it as a multi-user gateway.
 ## Secrets and privacy
 
 Do not commit runtime configuration, history, logs, API keys, passwords, or MCP
-credentials. The application still uses a shared web password and stores provider
-credentials in its local configuration; this is not equivalent to encrypted
-secret storage or short-lived user sessions. Protect the host account and backup
-files accordingly.
+credentials. Provider API keys, the shared web password, and sensitive provider headers are
+now encrypted in `config/config.json` with AES-256-GCM. By default, the master key
+is stored separately at `~/.node-ai-web/master.key` with restrictive permissions;
+setting `NODE_AI_WEB_MASTER_KEY` uses that environment value instead. Back up the
+master key separately: losing it makes encrypted credentials unrecoverable. The
+web password is encrypted, not yet password-hashed, and authentication is still a
+shared static-password model rather than short-lived user sessions. MCP server
+credentials remain in the separately permission-restricted `config/mcp-servers.json`.
 
 ## Reporting
 
