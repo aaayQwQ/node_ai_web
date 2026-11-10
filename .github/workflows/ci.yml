@@ -1,0 +1,27 @@
+name: Node compatibility and tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [12, 14, 16, 18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Syntax checks
+        run: |
+          find . -name '*.js' -not -path './.git/*' -print0 | xargs -0 -n1 node --check
+      - name: Base URL tests
+        run: node tests/base-url.test.js
+      - name: SSRF address tests
+        run: node tests/security.test.js
+      - name: MCP Streamable HTTP tests
+        run: node tests/mcp-streamable-http.test.js
