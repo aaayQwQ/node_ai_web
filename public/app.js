@@ -9,6 +9,7 @@ const state = {
   activeChatId: null,
   controller: null,
   thinking: false,
+  thinkingLevel: 'high',
   auth: localStorage.getItem('node-ai-web-password') || '',
   nextChatId: 1,
   providerModels: []
@@ -111,72 +112,91 @@ function highlightCode(source, language) {
 
 function renderMarkdown(value) {
   const source = String(value || '').replace(/\r\n?/g, '\n');
+  const lines = source.split('\n');
   const codeBlocks = [];
-
-  let text = source.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, (_, language, code) => {
-    const index = codeBlocks.length;
-    codeBlocks.push({
-      language: escapeHTML(language.trim()),
-      code: code.replace(/\n$/, '')
-    });
-    return '\n@@CODE_BLOCK_' + index + '@@\n';
-  });
-
-  const blocks = text.split(/\n{2,}/).map(block => {
+  const textLines = [];
+  let index = 0;
+  while (index < lines.length) {
+    const opening = lines[index].match(/^ {0,3}(```+|~~~+)[ \t]*([^ \t]*)[^\n]*$/);
+    if (!opening) { textLines.push(lines[index++]); continue; }
+    const fence = opening[1], language = (opening[2] || '').trim();
+    index++;
+    const codeLines = [];
+    let closed = false;
+    while (index < lines.length) {
+      const closing = lines[index].match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
+      if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) {
+        closed = true; index++; break;
+      }
+      codeLines.push(lines[index++]);
+    }
+    const blockIndex = codeBlocks.length;
+    codeBlocks.push({ language, code: codeLines.join('\n').replace(/\n$/, '') });
+    textLines.push('', '@@CODE_BLOCK_' + blockIndex + '@@', '');
+    if (!closed) break;
+  }
+  const blocks = textLines.join('\n').split(/\n{2,}/).map(block => {
     const trimmed = block.trim();
     if (!trimmed) return '';
-
     const codeMatch = trimmed.match(/^@@CODE_BLOCK_(\d+)@@$/);
     if (codeMatch) {
       const code = codeBlocks[Number(codeMatch[1])];
-      const label = code.language
-        ? '<span class="code-language">' + code.language + '</span>'
-        : '';
-
-      return '<pre>' + label
-        + '<button type="button" class="copy-code">复制</button>'
-        + '<code>' + highlightCode(code.code, code.language.replace(/&amp;/g, '&')) + '</code></pre>';
+      return '<section class="markdown-code-block"><div class="code-toolbar"><span class="code-language">'
+        + escapeHTML(code.language || 'TEXT') + '</span><button type="button" class="copy-code">复制</button></div>'
+        + '<pre><code>' + highlightCode(code.code, code.language) + '</code></pre></section>';
     }
-
-    if (/^#{1,3}\s/.test(trimmed)) {
-      const heading = trimmed.match(/^(#{1,3})\s+([\s\S]+)$/);
-      const level = heading[1].length;
+    if (/^#{1,6}\s/.test(trimmed)) {
+      const heading = trimmed.match(/^(#{1,6})\s+([\s\S]+)$/), level = heading[1].length;
       return '<h' + level + '>' + renderInlineMarkdown(heading[2]) + '</h' + level + '>';
     }
-
     const lines = trimmed.split('\n');
-    if (lines.every(line => /^\s*[-*+]\s+/.test(line))) {
-      return '<ul>' + lines.map(line =>
-        '<li>' + renderInlineMarkdown(line.replace(/^\s*[-*+]\s+/, '')) + '</li>'
-      ).join('') + '</ul>';
-    }
-
-    if (lines.every(line => /^\s*\d+\.\s+/.test(line))) {
-      return '<ol>' + lines.map(line =>
-        '<li>' + renderInlineMarkdown(line.replace(/^\s*\d+\.\s+/, '')) + '</li>'
-      ).join('') + '</ol>';
-    }
-
+    if (lines.every(line => /^\s*[-*+]\s+/.test(line)))
+      return '<ul>' + lines.map(line => '<li>' + renderInlineMarkdown(line.replace(/^\s*[-*+]\s+/, '')) + '</li>').join('') + '</ul>';
+    if (lines.every(line => /^\s*\d+\.\s+/.test(line)))
+      return '<ol>' + lines.map(line => '<li>' + renderInlineMarkdown(line.replace(/^\s*\d+\.\s+/, '')) + '</li>').join('') + '</ol>';
     if (lines.length >= 2 && lines.every(line => /^\s*\|.*\|\s*$/.test(line))) {
       const cells = lines.map(line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim()));
       const hasSeparator = cells.length > 1 && cells[1].every(cell => /^:?-{3,}:?$/.test(cell));
-      const headerCells = cells[0];
-      const bodyRows = cells.slice(hasSeparator ? 2 : 1);
+      const headers = cells[0], rows = cells.slice(hasSeparator ? 2 : 1);
       return '<div class="markdown-table-wrap"><table class="markdown-table"><thead><tr>'
-        + headerCells.map(cell => '<th>' + renderInlineMarkdown(cell) + '</th>').join('')
-        + '</tr></thead><tbody>' + bodyRows.map(row => '<tr>'
-          + headerCells.map((_, i) => '<td>' + renderInlineMarkdown(row[i] || '') + '</td>').join('')
-          + '</tr>').join('') + '</tbody></table></div>';
+        + headers.map(cell => '<th>' + renderInlineMarkdown(cell) + '</th>').join('')
+        + '</tr></thead><tbody>' + rows.map(row => '<tr>' + headers.map((_, i) => '<td>' + renderInlineMarkdown(row[i] || '') + '</td>').join('') + '</tr>').join('')
+        + '</tbody></table></div>';
     }
-
-    if (lines.every(line => /^\s*&gt;\s?/.test(escapeHTML(line)))) {
+    if (lines.every(line => /^\s*>/.test(line)))
       return '<blockquote>' + lines.map(line => renderInlineMarkdown(line.replace(/^\s*>\s?/, ''))).join('<br>') + '</blockquote>';
-    }
-
     return '<p>' + renderInlineMarkdown(trimmed).replace(/\n/g, '<br>') + '</p>';
   });
-
   return blocks.join('');
+}
+function renderAssistantHTML(message) {
+  return (message.reasoning
+    ? '<details class="thinking-panel"><summary><span class="thinking-pulse"></span>已深度思考 <span class="thinking-panel-note">展开查看</span></summary><div class="thinking-content">' + renderMarkdown(message.reasoning) + '</div></details>'
+    : '') + renderMarkdown(message.content || (state.controller ? '正在思考…' : ''))
+    + (message.error ? '<div class="message-inline-error">' + escapeHTML(message.error) + '</div>' : '')
+    + (message.stopped ? '<div class="message-stopped">已停止生成</div>' : '');
+}
+function bindCopyButtons(container) {
+  container.querySelectorAll('.copy-code').forEach(button => {
+    button.addEventListener('click', async () => {
+      const code = button.closest('.markdown-code-block').querySelector('code').innerText;
+      try { await navigator.clipboard.writeText(code); button.textContent = '已复制'; }
+      catch (_) { button.textContent = '复制失败'; }
+      window.setTimeout(() => { button.textContent = '复制'; }, 1400);
+    });
+  });
+}
+function renderStreamingMessage(message) {
+  const rows = $('messages').querySelectorAll('.message.assistant');
+  const row = rows[rows.length - 1];
+  if (!row) return;
+  const bubble = row.querySelector('.bubble');
+  if (!bubble) return;
+  const notice = bubble.querySelector('.message-tool-notice');
+  bubble.innerHTML = (notice ? notice.outerHTML : '') + renderAssistantHTML(message);
+  bindCopyButtons(bubble);
+  const container = $('messages');
+  container.scrollTop = container.scrollHeight;
 }
 
 function parseJSONField(value, label) {
@@ -251,8 +271,10 @@ function createChat() {
     title: '新对话',
     messages: [],
     updatedAt: Date.now(),
-    thinking: false
+    thinking: false,
+    thinkingLevel: state.thinkingLevel || 'high'
   };
+  state.thinking = false;
 
   state.chats.push(chat);
   state.activeChatId = chat.id;
@@ -294,6 +316,7 @@ function renderHistory() {
     open.addEventListener('click', () => {
       state.activeChatId = chat.id;
       state.thinking = Boolean(chat.thinking);
+      state.thinkingLevel = ['low', 'medium', 'high'].includes(chat.thinkingLevel) ? chat.thinkingLevel : 'high';
       updateThinkingButton();
       renderHistory();
       renderMessages();
@@ -446,11 +469,7 @@ function renderMessages() {
         ).join('、');
         bubble.appendChild(notice);
       }
-      bubble.innerHTML = (message.reasoning
-        ? '<details class="thinking-panel"><summary><span class="thinking-pulse"></span>已深度思考 <span class="thinking-panel-note">展开查看</span></summary><div class="thinking-content">' + renderMarkdown(message.reasoning) + '</div></details>'
-        : '') + renderMarkdown(message.content || (state.controller ? '正在思考…' : ''))
-        + (message.error ? '<div class="message-inline-error">' + escapeHTML(message.error) + '</div>' : '')
-        + (message.stopped ? '<div class="message-stopped">已停止生成</div>' : '');
+      bubble.innerHTML = renderAssistantHTML(message);
 
       row.append(avatar, bubble);
     }
@@ -460,20 +479,7 @@ function renderMessages() {
 
   container.scrollTop = container.scrollHeight;
 
-  container.querySelectorAll('.copy-code').forEach(button => {
-    button.addEventListener('click', async () => {
-      const code = button.parentElement.querySelector('code').innerText;
-
-      try {
-        await navigator.clipboard.writeText(code);
-        button.textContent = '已复制';
-      } catch (_) {
-        button.textContent = '复制失败';
-      }
-
-      window.setTimeout(() => { button.textContent = '复制'; }, 1400);
-    });
-  });
+  bindCopyButtons(container);
 
   container.scrollTop = container.scrollHeight;
   $('modelSelect').title = $('modelSelect').selectedOptions[0]?.textContent || '模型 / 服务商';
@@ -549,17 +555,23 @@ function updateThinkingButton() {
   const button = $('thinkingBtn');
   if (!button) return;
   const enabled = Boolean(state.thinking);
+  const level = ['low', 'medium', 'high'].includes(state.thinkingLevel) ? state.thinkingLevel : 'high';
+  state.thinkingLevel = level;
   button.classList.toggle('thinking-active', enabled);
   button.dataset.enabled = String(enabled);
-  button.title = enabled
-    ? '深度思考已开启；是否实际执行取决于当前模型和服务商'
-    : '开启深度思考模式';
+  button.title = enabled ? '思考模式已开启 · ' + ({ low: '轻量', medium: '标准', high: '深度' }[level]) + '等级' : '思考模式已关闭';
   button.setAttribute('aria-pressed', String(enabled));
-  button.setAttribute('aria-label', enabled ? '关闭深度思考模式' : '开启深度思考模式');
+  button.setAttribute('aria-label', enabled ? '关闭思考模式' : '开启思考模式');
   const label = button.querySelector('[data-thinking-label]');
-  if (label) label.textContent = enabled ? '深度思考已开启' : '深度思考';
+  if (label) label.textContent = enabled ? '思考已开启' : '思考已关闭';
   const symbol = button.querySelector('.thinking-symbol');
   if (symbol) symbol.textContent = enabled ? '✓' : '◉';
+  const levelSelect = $('thinkingLevel');
+  if (levelSelect) {
+    levelSelect.value = level;
+    levelSelect.disabled = !enabled;
+    levelSelect.title = enabled ? '选择思考等级' : '开启思考模式后选择等级';
+  }
 }
 
 function buildContextMessages(messages, maxTurns) {
@@ -756,7 +768,7 @@ async function sendMessage(event) {
         top_p: Number(state.config.topP ?? 1),
         max_tokens: Number(state.config.maxTokens ?? 4096)
       };
-      if (state.thinking) payload.reasoning_effort = 'high';
+      if (state.thinking) payload.reasoning_effort = state.thinkingLevel || 'high';
       if (mcpTools.length && !finalSummaryTurn) {
         payload.tools = mcpTools.map(tool => ({ type: 'function', function: tool.function }));
       } else if (finalSummaryTurn) {
@@ -787,10 +799,11 @@ async function sendMessage(event) {
         const events = pending.split(/\r?\n\r?\n/);
         pending = events.pop();
         for (const eventText of events) parseSSEChunk(eventText, assistant);
-        renderMessages();
+        renderStreamingMessage(assistant);
       }
       pending += decoder.decode();
       if (pending.trim()) parseSSEChunk(pending, assistant);
+      renderStreamingMessage(assistant);
 
       const toolCalls = (assistant.tool_calls || []).filter(call => call && call.function && call.function.name);
       if (!toolCalls.length) {
@@ -1325,11 +1338,13 @@ async function saveProvider() {
     if (!provider.apiKey && !(existing && existing.apiKeySet)) throw new Error('请填写 API Key。');
     const providers = providerDefaults().filter(item => item.id !== id);
     providers.push(provider);
-    const selected = Array.isArray(state.config.selectedModels) ? state.config.selectedModels : [];
+    const checkedNow = Array.from($('providerModels').querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+    const keepOther = (state.config.selectedModels || []).filter(item => item.providerId !== id);
+    const selected = keepOther.concat(checkedNow.map(modelId => ({ providerId: id, modelId, enabled: true })));
     await persistProviders(providers, selected);
     $('providerId').value = id;
     $('providerEditorTitle').textContent = '管理模型 / 编辑：' + provider.name;
-    $('providerResult').textContent = '服务商已保存。现在可以手动添加模型，或在线获取后勾选，再保存模型选择。';
+    $('providerResult').textContent = '服务商及当前勾选的 ' + checkedNow.length + ' 个模型已保存；也可以继续添加模型。';
     renderProviders();
     showProviderEditor();
     showToast('服务商已保存', 'success');
@@ -1443,12 +1458,25 @@ $('modelSelect').addEventListener('change', () => {
 $('thinkingBtn').addEventListener('click', () => {
   state.thinking = !state.thinking;
   const chat = currentChat();
-  if (chat) chat.thinking = state.thinking;
+  if (chat) {
+    chat.thinking = state.thinking;
+    chat.thinkingLevel = state.thinkingLevel;
+  }
   updateThinkingButton();
   saveHistory();
   showToast(state.thinking
     ? '已开启深度思考。实际效果取决于当前模型与服务商。'
-    : '已关闭深度思考模式。', 'info');
+    : '已关闭思考模式。', 'info');
+});
+$('thinkingLevel').addEventListener('change', () => {
+  const level = $('thinkingLevel').value;
+  if (!['low', 'medium', 'high'].includes(level)) return;
+  state.thinkingLevel = level;
+  const chat = currentChat();
+  if (chat) chat.thinkingLevel = level;
+  updateThinkingButton();
+  saveHistory();
+  showToast('思考等级已设为' + ({ low: '轻量', medium: '标准', high: '深度' }[level]) + '。', 'info');
 });
 $('attachBtn').addEventListener('click', () => {
   showToast('附件上传暂未接入；此按钮目前保留为工具入口。', 'info');
@@ -1482,13 +1510,17 @@ if (localStorage.getItem('node-ai-web-theme') === 'light') {
     .map(chat => Object.assign({
       title: '新对话',
       updatedAt: Date.now(),
-      thinking: false
+      thinking: false,
+      thinkingLevel: 'high'
     }, chat));
 
   if (state.chats.length) {
     state.activeChatId = state.chats
       .slice()
       .sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
+    const active = currentChat();
+    state.thinking = Boolean(active && active.thinking);
+    state.thinkingLevel = active && ['low', 'medium', 'high'].includes(active.thinkingLevel) ? active.thinkingLevel : 'high';
   }
 
   renderHistory();
