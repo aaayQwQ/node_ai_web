@@ -912,10 +912,6 @@ async function saveSettings() {
   }
 }
 
-async function testConnection() {
-  showToast('请在“设置 → 服务商与模型”中测试具体服务商连接。', 'info');
-}
-
 async function openPlugins() {
   const container = $('pluginList');
   container.replaceChildren();
