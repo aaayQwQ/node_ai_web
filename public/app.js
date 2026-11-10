@@ -359,7 +359,7 @@ function renderMessages() {
     }));
     const setupButton = $('welcomeSetupBtn');
     if (setupButton) setupButton.addEventListener('click', openProviders);
-    $('modelSelect').title = state.config.model || '默认模型';
+    $('modelSelect').title = state.config.model || '模型 / 服务商';
     return;
   }
 
@@ -428,7 +428,7 @@ function renderMessages() {
   });
 
   container.scrollTop = container.scrollHeight;
-  $('modelSelect').title = $('modelSelect').selectedOptions[0]?.textContent || '请选择已勾选的模型';
+  $('modelSelect').title = $('modelSelect').selectedOptions[0]?.textContent || '模型 / 服务商';
   updateThinkingButton();
   if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
     try {
@@ -482,14 +482,14 @@ async function loadModels() {
     : [];
   select.replaceChildren(new Option('选择已启用的模型', ''));
   for (const item of enabled) {
-    const provider = providers.find(entry => entry.id === item.providerId);
-    if (!provider) continue;
+    const provider = providers.find(entry => entry.id === item.providerId && entry.baseURL && entry.apiKeySet);
+    if (!provider || !item.modelId) continue;
     const value = provider.id + '::' + item.modelId;
     select.add(new Option(item.modelId + ' / ' + provider.name, value));
   }
   select.value = selected;
   if (select.value !== selected) select.value = '';
-  select.title = select.selectedOptions[0]?.textContent || '请选择已勾选的模型';
+  select.title = select.selectedOptions[0]?.textContent || '模型 / 服务商';
 }
 function updateThinkingButton() {
   const button = $('thinkingBtn');
