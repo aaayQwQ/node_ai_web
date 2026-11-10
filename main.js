@@ -51,7 +51,7 @@ if (process.argv.includes('--check')) {
   let config;
 
   try {
-    config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    config = require('./src/config_manager')(ROOT).read();
     console.log('Config JSON: OK');
   } catch (error) {
     console.error('Config JSON: FAIL - ' + error.message);
