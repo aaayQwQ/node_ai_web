@@ -1332,9 +1332,10 @@ async function saveProvider() {
     const selected = Array.isArray(state.config.selectedModels) ? state.config.selectedModels : [];
     await persistProviders(providers, selected);
     $('providerId').value = id;
-    $('providerResult').textContent = '服务商已保存。现在点击“读取模型”，勾选模型后再保存选择。';
+    $('providerEditorTitle').textContent = '管理模型 / 编辑：' + provider.name;
+    $('providerResult').textContent = '服务商已保存。现在可以手动添加模型，或在线获取后勾选，再保存模型选择。';
     renderProviders();
-    showProviderList();
+    showProviderEditor();
     showToast('服务商已保存', 'success');
   } catch (error) {
     $('providerResult').textContent = error.message;
