@@ -58,7 +58,7 @@
           <div class="composer-hint"><span class="hint-mark">↳</span> AI 可能会出错。请核查重要信息。</div>
           <div class="composer-actions">
             <button type="button" class="icon-button attach-button" id="attachBtn" title="当前版本暂不支持附件" aria-label="附件">＋</button>
-            <button type="button" class="thinking-button" id="thinkingBtn" title="切换思考模式" aria-label="切换思考模式" aria-pressed="false"><span data-thinking-label>深度思考</span><span class="thinking-symbol" aria-hidden="true">◉</span></button>
+            <button type="button" class="thinking-button" id="thinkingBtn" title="切换思考模式" aria-label="切换思考模式" aria-pressed="false"><span data-thinking-label>思考已关闭</span><span class="thinking-symbol" aria-hidden="true">◉</span></button><select id="thinkingLevel" class="thinking-level" aria-label="思考等级" title="思考等级" disabled><option value="low">轻量</option><option value="medium">标准</option><option value="high" selected>深度</option></select>
             <button type="submit" class="send-button" id="send" aria-label="发送消息"><span>发送</span><span class="send-arrow">↑</span></button>
             <button type="button" class="send-button stop-button" id="stop" aria-label="停止生成" hidden><span>停止</span><span class="send-arrow">■</span></button>
           </div>
@@ -199,6 +199,6 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-  <script defer src="/app.js?v=20261110-provider-models-2"></script>
+  <script defer src="/app.js?v=20261110-live-markdown-thinking-3"></script>
 </body>
 </html>
