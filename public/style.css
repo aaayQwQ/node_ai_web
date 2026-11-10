@@ -2038,3 +2038,39 @@ html body .chat-scroll > .welcome-modern .setup-foot {
 }
 
 .settings-section-title { margin: 4px 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 650; }
+
+
+/* Per-conversation overflow menu: compact vertical action sheet. */
+.history-item { position: relative; }
+.history-more {
+  display: grid; place-items: center; flex: 0 0 28px;
+  width: 28px; height: 30px; padding: 0; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font-size: 21px; line-height: 1;
+  cursor: pointer; opacity: 0; transition: opacity .14s ease, background .14s ease, color .14s ease;
+}
+.history-item:hover .history-more,
+.history-item:focus-within .history-more,
+.history-item.active .history-more,
+.history-more[aria-expanded="true"] { opacity: 1; }
+.history-more:hover,
+.history-more[aria-expanded="true"] { background: var(--panel); color: var(--ink); }
+.history-menu {
+  position: absolute; z-index: 30; top: calc(100% - 2px); right: 3px;
+  display: flex; flex-direction: column; gap: 2px; width: 132px; padding: 5px;
+  border: 1px solid var(--line-strong); border-radius: 10px;
+  background: var(--panel); box-shadow: 0 12px 32px #0005;
+}
+.history-menu[hidden] { display: none !important; }
+.history-menu-item {
+  display: flex; align-items: center; width: 100%; min-height: 36px;
+  padding: 7px 10px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--ink); text-align: left;
+  font-size: 12px; cursor: pointer;
+}
+.history-menu-item:hover { background: var(--paper-2); }
+.history-menu-delete { color: #e36a6a; }
+.history-menu-delete:hover { background: color-mix(in srgb, #e36a6a 12%, var(--panel)); }
+@media (max-width: 760px) {
+  .history-more { opacity: 1; }
+  .history-menu { right: 0; }
+}
