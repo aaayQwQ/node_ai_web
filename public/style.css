@@ -2074,3 +2074,69 @@ html body .chat-scroll > .welcome-modern .setup-foot {
   .history-more { opacity: 1; }
   .history-menu { right: 0; }
 }
+
+
+/* Settings subpages: explicit navigation back to the settings home. */
+.settings-back {
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.settings-back:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--panel);
+}
+.provider-manual-model-row,
+.provider-online-model-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin: 10px 0;
+}
+.provider-manual-model-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.provider-manual-model-row button,
+.provider-online-model-row button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--paper-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+.provider-manual-model-row button:hover,
+.provider-online-model-row button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.provider-online-model-row {
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-2);
+}
+.provider-online-model-row > span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+@media (max-width: 520px) {
+  .provider-manual-model-row { align-items: stretch; flex-direction: column; }
+  .provider-manual-model-row button { width: 100%; }
+  .provider-online-model-row { align-items: stretch; flex-direction: column; }
+  .provider-online-model-row button { width: 100%; }
+  .modal-header-actions .settings-back { min-height: 34px; padding: 6px 8px; }
+}
