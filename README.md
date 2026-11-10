@@ -54,7 +54,7 @@ node main.js --check
 
 ## 插件
 
-每个插件目录需包含 `plugin.json` 与 `index.js`。支持的钩子：`onPluginInit`、`beforeRequest`、`afterResponse`、`onRequestError`、`onServerStart`。插件可以通过 `context.storage.get(key)` 和 `context.storage.set(key,value)` 保存简单状态。插件代码运行在 Node VM 上，但这不是完整的安全边界；只安装可信插件。
+每个插件目录需包含 `plugin.json` 与 `index.js`。支持的钩子：`onPluginInit`、`beforeRequest`、`afterResponse`、`onRequestError`、`onServerStart`。插件可以通过 `context.storage.get(key)` 和 `context.storage.set(key,value)` 保存简单状态。插件代码运行在 Node VM 上，**VM 不是安全边界**。插件默认不加载；仅当管理员将可信插件 ID 写入环境变量 `NODE_AI_WEB_TRUSTED_PLUGINS`（逗号分隔）后才允许启用。不要把未知插件加入白名单。
 
 ## 排错
 
