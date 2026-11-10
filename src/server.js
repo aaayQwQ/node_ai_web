@@ -36,12 +36,16 @@ function start(root) {
     response.writeHead(statusCode, {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff'
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Content-Security-Policy': \"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\"
     });
     response.end(JSON.stringify(data));
   }
 
-  function readJSON(request, maxBytes = 5 * 1024 * 1024) {
+  function readJSON(request, maxBytes = 1024 * 1024) {
     return new Promise((resolve, reject) => {
       let size = 0;
       const chunks = [];
@@ -51,7 +55,7 @@ function start(root) {
 
         if (size > maxBytes) {
           reject(Object.assign(new Error('请求体过大。'), { status: 413 }));
-          request.destroy();
+          request.resume();
           return;
         }
 
@@ -148,7 +152,7 @@ function start(root) {
     }
 
     if (pathname === '/api/config' && request.method === 'POST') {
-      const body = await readJSON(request);
+      const body = await readJSON(request, 64 * 1024);
       const update = Object.assign({}, body);
 
       // 空密钥代表保留原密钥；API Key 不会通过读取配置接口发回浏览器。
@@ -236,7 +240,7 @@ function start(root) {
     }
 
     if (pathname === '/api/history' && request.method === 'POST') {
-      const history = await readJSON(request);
+      const history = await readJSON(request, 5 * 1024 * 1024);
 
       if (!Array.isArray(history)) {
         sendJSON(response, 400, { error: { message: '历史记录必须是数组。' } });
@@ -254,7 +258,7 @@ function start(root) {
     }
 
     if (pathname === '/api/mcp/servers' && request.method === 'POST') {
-      const body = await readJSON(request);
+      const body = await readJSON(request, 64 * 1024);
       try {
         const saved = mcp.save(body);
         sendJSON(response, 200, { ok: true, server: saved });
@@ -288,7 +292,7 @@ function start(root) {
     }
 
     if (pathname === '/api/mcp/call' && request.method === 'POST') {
-      const body = await readJSON(request);
+      const body = await readJSON(request, 256 * 1024);
       try {
         const serverId = String(body.name || '').split('__')[0];
         const serverInfo = mcp.get(serverId);
@@ -326,7 +330,7 @@ function start(root) {
     }
 
     if (pathname === '/api/test' && request.method === 'POST') {
-      const body = await readJSON(request);
+      const body = await readJSON(request, 64 * 1024);
       const savedProvider = body.providerId && (currentConfig.providers || []).find(item => item.id === body.providerId);
       const baseURL = body.baseURL || (savedProvider && savedProvider.baseURL) || currentConfig.baseURL;
       const apiKey = body.apiKey || (savedProvider && savedProvider.apiKey) || currentConfig.apiKey;
@@ -370,13 +374,8 @@ function start(root) {
 
     if (pathname === '/health' && request.method === 'GET') {
       sendJSON(response, 200, {
-        ok: true,
-        node: process.version,
-        uptime: Math.floor(process.uptime()),
-        memoryMB: Math.round(process.memoryUsage().rss / 1048576),
-        pluginCount: plugins.list().length,
-        configured: Boolean(currentConfig.baseURL && currentConfig.apiKey),
-        model: currentConfig.model || ''
+        status: 'ok',
+        uptime: Math.floor(process.uptime())
       });
       return true;
     }
@@ -417,7 +416,17 @@ function start(root) {
         return true;
       }
 
-      const body = await readJSON(request);
+      const body = await readJSON(request, 1024 * 1024);
+
+      if (!body || typeof body !== 'object' || Array.isArray(body) || !body.input || (typeof body.input !== 'string' && !Array.isArray(body.input))) {
+        sendJSON(response, 400, { error: { message: 'Embeddings input 格式无效。' } });
+        return true;
+      }
+      const embeddingItems = Array.isArray(body.input) ? body.input : [body.input];
+      if (embeddingItems.length > 128 || embeddingItems.some(item => typeof item !== 'string' || item.length > 32000) || embeddingItems.reduce((sum, item) => sum + item.length, 0) > 256 * 1024) {
+        sendJSON(response, 413, { error: { message: 'Embeddings 输入超过数量或长度限制。' } });
+        return true;
+      }
 
       try {
         const result = await proxy.request(
@@ -454,7 +463,7 @@ function start(root) {
         return true;
       }
 
-      const input = await readJSON(request);
+      const input = await readJSON(request, 5 * 1024 * 1024);
       let chatConfig = currentConfig;
       const requestedModel = input.model;
       if (typeof requestedModel === 'string' && requestedModel.includes('::')) {
@@ -561,11 +570,7 @@ function start(root) {
     }
 
     if (request.method === 'OPTIONS') {
-      response.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Web-Password',
-        'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
-      });
+      response.writeHead(403, { 'Cache-Control': 'no-store', 'Vary': 'Origin' });
       response.end();
       return;
     }
@@ -603,6 +608,10 @@ function start(root) {
       response.writeHead(200, {
         'Content-Type': mimeTypes[path.extname(file)] || 'application/octet-stream',
         'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'no-referrer',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+        'Content-Security-Policy': \"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\",
         'Cache-Control': path.extname(file) === '.html' ? 'no-cache' : 'public, max-age=300'
       });
       response.end(content);
@@ -618,6 +627,16 @@ function start(root) {
   const initialConfig = config.read();
   const host = initialConfig.host || '127.0.0.1';
   const port = Number(initialConfig.port) || 3001;
+  const loopbackHosts = ['127.0.0.1', '::1', 'localhost'];
+  if (loopbackHosts.indexOf(host) === -1 && !initialConfig.webPassword) {
+    throw new Error('拒绝在非本机地址监听：请先设置网页访问密码，或将 host 改为 127.0.0.1。');
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('配置中的端口必须是 1 到 65535 之间的整数。');
+  }
+  server.requestTimeout = 120000;
+  server.headersTimeout = 15000;
+  server.keepAliveTimeout = 5000;
 
   server.listen(port, host, () => {
     log('INFO', '服务已启动：http://' + host + ':' + port);
