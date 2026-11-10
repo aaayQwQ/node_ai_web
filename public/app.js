@@ -1274,18 +1274,37 @@ function updateProviderModelCount() {
   const count = $('providerModels').querySelectorAll('input[type="checkbox"]').length;
   $('providerModelCount').textContent = count + ' 个模型';
 }
-function addManualProviderModel() {
+async function addManualProviderModel() {
   const input = $('providerManualModel');
-  const id = input.value.trim();
-  if (!id) {
+  const modelId = input.value.trim();
+  if (!modelId) {
     $('providerResult').textContent = '请先输入模型 ID。';
     input.focus();
     return;
   }
-  const added = addProviderModelOption(id, true);
+  const added = addProviderModelOption(modelId, true);
   input.value = '';
   updateProviderModelCount();
-  $('providerResult').textContent = added ? '已添加模型，并默认勾选。' : '该模型已存在，已确保勾选。';
+  const providerId = $('providerId').value;
+  const savedProvider = providerId && providerDefaults().find(item => item.id === providerId);
+  if (savedProvider) {
+    try {
+      const otherModels = (state.config.selectedModels || []).filter(item => item.providerId !== providerId);
+      const currentModels = (state.config.selectedModels || []).filter(item => item.providerId === providerId && item.enabled !== false);
+      const byId = new Map(currentModels.map(item => [item.modelId, item]));
+      byId.set(modelId, { providerId, modelId, enabled: true });
+      await persistProviders(providerDefaults(), otherModels.concat(Array.from(byId.values())));
+      $('providerResult').textContent = '模型 ' + modelId + ' 已保存，并已加入聊天模型列表。';
+      showToast('模型已添加到聊天列表', 'success');
+    } catch (error) {
+      $('providerResult').textContent = '模型已加入临时列表，但保存失败：' + error.message;
+      showToast('模型保存失败：' + error.message, 'warning');
+    }
+  } else {
+    $('providerResult').textContent = added
+      ? '模型已加入列表；保存服务商时会一并保存并加入聊天模型列表。'
+      : '该模型已存在，已确保勾选。';
+  }
   input.focus();
 }
 
