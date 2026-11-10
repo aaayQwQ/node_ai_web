@@ -4,7 +4,7 @@
 
 ## 要求
 
-- Node.js 12 或更新版本（推荐当前受支持的 LTS）。
+- Node.js 12 或更新版本（Node.js 12 已停止安全维护，建议使用受支持的 LTS；兼容性仍以 Node.js 12 为最低目标）。
 - 一个兼容 OpenAI Chat Completions API 的 Base URL 和 API Key。
 
 ## 启动
@@ -33,7 +33,7 @@ node main.js --check
 - `logs/YYYY-MM-DD.log`：按天记录的日志，自动保留最近 14 天。
 - `plugins/`：插件目录。
 
-请勿将带有真实 API Key 或网页密码的配置提交到公开仓库。网页访问密码默认为空；若监听在非本机地址，建议配置密码并自行使用 HTTPS/反向代理。
+请勿将带有真实 API Key 或网页密码的配置提交到公开仓库。默认仅监听 `127.0.0.1`。若将 `host` 改为非本机地址，必须配置网页访问密码，否则服务拒绝启动。当前认证仍是单一共享密码模式，不应视为多用户身份系统；公网部署仍必须使用 HTTPS 和可信反向代理。
 
 ## API
 
@@ -50,7 +50,7 @@ node main.js --check
 - `GET /api/mcp/tools`：返回所有已启用服务的 OpenAI Function Calling 工具定义。
 - `POST /api/mcp/call`：调用 MCP 工具。\n- `POST /api/plugins/:id/enable` 和 `/disable`：启用或停用插件。\n- `POST /api/plugins/:id/reload`：重新加载插件。
 
-当配置网页访问密码后，API 和网页都需要使用 `Authorization: Bearer <网页密码>`。聊天接口有每 IP 每分钟 60 次的简单限流。
+当配置网页访问密码后，API 和网页都需要使用 `Authorization: Bearer <网页密码>`。服务默认拒绝跨域预检请求，不提供通配符 CORS。JSON 请求体默认限制为 1 MiB，配置接口 64 KiB，历史 5 MiB。
 
 ## 插件
 
