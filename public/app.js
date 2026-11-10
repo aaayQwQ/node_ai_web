@@ -487,8 +487,16 @@ async function loadModels() {
     const value = provider.id + '::' + item.modelId;
     select.add(new Option(item.modelId + ' / ' + provider.name, value));
   }
-  select.value = selected;
-  if (select.value !== selected) select.value = '';
+
+  // 已配置服务商模型时，默认选中第一个，避免聊天请求退回空的全局配置。
+  const availableValues = Array.from(select.options).slice(1).map(option => option.value);
+  if (selected && availableValues.includes(selected)) {
+    select.value = selected;
+  } else if (availableValues.length) {
+    select.value = availableValues[0];
+  } else {
+    select.value = '';
+  }
   select.title = select.selectedOptions[0]?.textContent || '模型 / 服务商';
 }
 function updateThinkingButton() {
@@ -635,9 +643,25 @@ async function sendMessage(event) {
   const content = input.value.trim();
   if (!content || state.controller) return;
 
-  if (!state.config.baseURL || !state.config.apiKeySet) {
-    showToast('请先配置 Base URL 和 API Key，再发送消息。', 'warning');
-    openSettings();
+  const selectedModel = $('modelSelect').value || '';
+  const hasSelectedProviderModel = selectedModel.includes('::')
+    && (state.config.providers || []).some(provider =>
+      provider.id === selectedModel.slice(0, selectedModel.indexOf('::'))
+      && provider.baseURL && provider.apiKeySet
+    );
+  const hasDefaultProvider = Boolean(state.config.baseURL && state.config.apiKeySet);
+
+  if (!hasSelectedProviderModel && !hasDefaultProvider) {
+    const hasConfiguredProviders = (state.config.providers || []).some(provider =>
+      provider.baseURL && provider.apiKeySet
+    );
+    showToast(
+      hasConfiguredProviders
+        ? '服务商已保存，但还没有可用模型。请进入“连接设置 → 服务商与模型”，读取模型并勾选保存。'
+        : '请先在“连接设置”中添加服务商，并保存至少一个可用模型。',
+      'warning'
+    );
+    openProviders();
     return;
   }
   if (!currentChat()) createChat();
