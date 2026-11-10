@@ -28,6 +28,7 @@ node main.js --check
 ## 配置
 
 - `config/config.json`：端口、上游 Base URL、API Key、模型、系统提示词、网页访问密码等。
+- 配置中的 API Key、网页访问密码和敏感请求头使用 AES-256-GCM 加密；默认主密钥位于 `~/.node-ai-web/master.key`。请将主密钥单独备份，丢失后无法恢复已加密凭据。也可通过 `NODE_AI_WEB_MASTER_KEY` 指定外部主密钥。
 - `config/history.json`：对话历史。
 - `config/plugins_data/`：插件持久化数据。
 - `logs/YYYY-MM-DD.log`：按天记录的日志，自动保留最近 14 天。
