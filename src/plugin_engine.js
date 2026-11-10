@@ -9,6 +9,11 @@ module.exports = function createPluginEngine(root, config, log) {
   const pluginRoot = path.join(root, 'plugins');
   const dataRoot = path.join(root, 'config', 'plugins_data');
 
+  function trustedPlugin(id) {
+    const allowed = String(process.env.NODE_AI_WEB_TRUSTED_PLUGINS || '').split(',').map(x => x.trim()).filter(Boolean);
+    return allowed.indexOf(id) !== -1;
+  }
+
   function pluginDirectory(id) {
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
       throw new Error('插件 ID 不合法。');
@@ -19,10 +24,17 @@ module.exports = function createPluginEngine(root, config, log) {
       throw new Error('插件目录无效。');
     }
 
+    try {
+      const stat = fs.lstatSync(directory);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('插件目录不能是符号链接。');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
     return directory;
   }
 
   function load(id) {
+    if (!trustedPlugin(id)) throw new Error('插件未加入 NODE_AI_WEB_TRUSTED_PLUGINS 白名单；VM 不是安全沙箱，只能加载完全可信代码。');
     const directory = pluginDirectory(id);
     const metadata = JSON.parse(
       fs.readFileSync(path.join(directory, 'plugin.json'), 'utf8')
@@ -83,7 +95,7 @@ module.exports = function createPluginEngine(root, config, log) {
   }
 
   function init() {
-    const enabled = config.read().enabledPlugins || [];
+    const enabled = (config.read().enabledPlugins || []).filter(trustedPlugin);
 
     for (const id of enabled) {
       try {
@@ -150,6 +162,7 @@ module.exports = function createPluginEngine(root, config, log) {
 
   function setEnabled(id, enabled) {
     pluginDirectory(id);
+    if (enabled && !trustedPlugin(id)) throw new Error('插件默认禁用。只有加入 NODE_AI_WEB_TRUSTED_PLUGINS 白名单的可信插件才能启用。');
 
     const current = config.read();
     const enabledIds = new Set(current.enabledPlugins || []);
