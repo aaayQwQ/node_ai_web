@@ -1180,6 +1180,7 @@ function resetProviderForm() {
   $('providerBaseURL').value = '';
   $('providerApiKey').value = '';
   $('providerApiKey').placeholder = '粘贴 API Key';
+  $('providerApiFormat').value = 'auto';
   $('providerHeaders').value = '{}';
   $('providerEditorTitle').textContent = '添加服务商';
   $('providerResult').textContent = '';
@@ -1193,6 +1194,7 @@ function editProvider(provider) {
   $('providerBaseURL').value = provider.baseURL || '';
   $('providerApiKey').value = '';
   $('providerApiKey').placeholder = provider.apiKeySet ? '密钥已保存；留空保留现有密钥' : '粘贴 API Key';
+  $('providerApiFormat').value = provider.apiFormat || 'auto';
   $('providerHeaders').value = JSON.stringify(provider.customHeaders || {}, null, 2);
   $('providerEditorTitle').textContent = '编辑服务商：' + (provider.name || '');
   $('providerResult').textContent = '';
@@ -1321,7 +1323,8 @@ async function readProviderModels() {
       name: $('providerName').value.trim() || '新服务商',
       baseURL: $('providerBaseURL').value.trim(),
       apiKey: $('providerApiKey').value.trim(),
-      customHeaders: parseJSONField($('providerHeaders').value, '自定义请求头')
+      customHeaders: parseJSONField($('providerHeaders').value, '自定义请求头'),
+      apiFormat: $('providerApiFormat').value
     };
     const saved = providerDefaults().find(item => item.id === id);
     if (!provider.apiKey && saved) provider.apiKey = saved.apiKey || '';
@@ -1354,7 +1357,8 @@ async function saveProvider() {
       name: $('providerName').value.trim(),
       baseURL: $('providerBaseURL').value.trim(),
       apiKey: $('providerApiKey').value.trim(),
-      customHeaders: parseJSONField($('providerHeaders').value, '自定义请求头')
+      customHeaders: parseJSONField($('providerHeaders').value, '自定义请求头'),
+      apiFormat: $('providerApiFormat').value
     };
     if (!provider.name || !provider.baseURL) throw new Error('服务商名称和 Base URL 必填。');
     if (!provider.apiKey && !(existing && existing.apiKeySet)) throw new Error('请填写 API Key。');
