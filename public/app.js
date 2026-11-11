@@ -865,7 +865,10 @@ async function sendMessage(event) {
       if (!assistant.content && !assistant.reasoning) assistant.content = '已停止生成。';
       else assistant.stopped = true;
     } else {
-      const detail = '这次请求未能完成。请检查模型服务商配置和网络连接后重试。';
+      // Keep the actual failure visible so provider/API errors are diagnosable.
+      const message = error && error.message ? String(error.message) : String(error || '未知错误');
+      console.error('[node-ai-web] 聊天请求失败：', error);
+      const detail = '请求失败：' + message.slice(0, 1800);
       if (assistant.content || assistant.reasoning) assistant.error = detail;
       else assistant.content = detail;
     }
