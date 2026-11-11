@@ -7,6 +7,17 @@
 - Node.js 12 或更新版本（Node.js 12 已停止安全维护，建议使用受支持的 LTS；兼容性仍以 Node.js 12 为最低目标）。
 - 一个兼容 OpenAI Chat Completions API 的 Base URL 和 API Key。
 
+## 模型协议兼容
+
+服务商编辑页可选择 API 协议：
+
+- **自动识别（推荐）**：OpenCode Zen 根据模型 ID 自动选择 Responses、Anthropic Messages 或 Chat Completions；其他服务商默认使用 Chat Completions。
+- **OpenAI Chat Completions**：适用于 OpenAI 兼容网关及大多数第三方推理服务。
+- **OpenAI Responses**：适用于提供 `/v1/responses` 的服务商。
+- **Anthropic Messages**：适用于提供 `/v1/messages` 的服务商，使用 `x-api-key` 和 `anthropic-version` 请求头。
+
+OpenCode Zen Base URL 可填写 `https://opencode.ai/zen` 或 `https://opencode.ai/zen/v1`。GPT / Grok / Muse Spark 自动走 Responses；Claude / Qwen 自动走 Anthropic Messages；DeepSeek / Kimi / GLM / MiniMax 等走 Chat Completions。模型目录和协议可能变化，遇到新模型可在服务商编辑页手动指定协议。非 Chat 协议目前会缓冲完整上游响应后转换为统一的 OpenAI 格式，因此前端仍可处理文本和 MCP 工具调用，但不会逐 token 实时显示上游生成过程。
+
 ## 启动
 
 在项目目录运行：
