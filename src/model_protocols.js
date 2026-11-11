@@ -8,7 +8,7 @@ function detect(config, model) {
   if (['chat', 'responses', 'anthropic'].includes(explicit)) return explicit;
   const base = String(config.baseURL || '').toLowerCase();
   const id = String(model || config.model || '').toLowerCase();
-  if (/opencode\\.ai/.test(base)) {
+  if (/opencode\.ai/.test(base)) {
     if (/^(gpt-|grok-|muse-spark)/.test(id)) return 'responses';
     if (/^(claude-|qwen)/.test(id)) return 'anthropic';
   }
