@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const { URL } = require('url');
 const ssrf = require('./ssrf');
+const protocols = require('./model_protocols');
 
 function normalizeBaseURL(value) {
   const input = String(value || '').trim();
@@ -31,8 +32,8 @@ function normalizeBaseURL(value) {
   // 允许粘贴常见的完整 API 路径，并把它还原成 API 根地址。
   parsed.pathname = parsed.pathname
     .replace(/\/v1\/v1$/i, '/v1')
-    .replace(/\/(chat\/completions|models|embeddings)$/i, '')
-    .replace(/\/v1\/(chat\/completions|models|embeddings)$/i, '/v1')
+    .replace(/\/(chat\/completions|models|embeddings|responses|messages)$/i, '')
+    .replace(/\/v1\/(chat\/completions|models|embeddings|responses|messages)$/i, '/v1')
     .replace(/\/+$/, '');
 
   return parsed;
@@ -163,7 +164,7 @@ async function check(baseURL, apiKey, customHeaders) {
   };
 }
 
-async function chat(config, payload, clientResponse, signal, log) {
+async function chatCompletions(config, payload, clientResponse, signal, log) {
   const target = endpointURL(config.baseURL, '/v1/chat/completions');
   const headers = authHeaders(config.apiKey, Object.assign({}, config.customHeaders || {}, {
     'Content-Type': 'application/json',
@@ -174,89 +175,100 @@ async function chat(config, payload, clientResponse, signal, log) {
   return new Promise((resolve, reject) => {
     const parsed = target;
     const transport = parsed.protocol === 'http:' ? http : https;
-    const req = transport.request(parsed, {
-      method: 'POST',
-      headers,
-      lookup: ssrf.lookup
-    }, upstream => {
+    const req = transport.request(parsed, { method: 'POST', headers, lookup: ssrf.lookup }, upstream => {
       if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
         const chunks = [];
-
         upstream.on('data', chunk => chunks.push(chunk));
         upstream.on('end', () => {
           const detail = Buffer.concat(chunks).toString('utf8').slice(0, 1200);
-          const error = new Error(
-            '上游 HTTP ' + upstream.statusCode + ' (' + parsed.href + ')：'
-            + (detail || upstream.statusMessage || '无错误详情')
-          );
+          const error = new Error('上游 HTTP ' + upstream.statusCode + ' (' + parsed.href + ')：' + (detail || upstream.statusMessage || '无错误详情'));
           error.status = upstream.statusCode || 502;
           error.url = parsed.href;
           reject(error);
         });
         return;
       }
-
       if (!payload.stream) {
         let responseBytes = 0;
         upstream.on('data', chunk => {
           responseBytes += chunk.length;
-          if (responseBytes > 20 * 1024 * 1024) {
-            upstream.destroy(new Error('上游聊天响应超过 20 MiB 限制。'));
-          }
+          if (responseBytes > 20 * 1024 * 1024) upstream.destroy(new Error('上游聊天响应超过 20 MiB 限制。'));
         });
-        clientResponse.writeHead(upstream.statusCode || 200, {
-          'Content-Type': upstream.headers['content-type'] || 'application/json',
-          'Cache-Control': 'no-store'
-        });
+        clientResponse.writeHead(upstream.statusCode || 200, { 'Content-Type': upstream.headers['content-type'] || 'application/json', 'Cache-Control': 'no-store' });
         clientResponse.on('error', reject);
         upstream.on('end', resolve);
         upstream.on('error', reject);
         upstream.pipe(clientResponse);
         return;
       }
-
       clientResponse.writeHead(upstream.statusCode || 200, {
         'Content-Type': upstream.headers['content-type'] || 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no'
+        'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no'
       });
-
-      upstream.on('data', chunk => {
-        if (!clientResponse.destroyed) {
-          clientResponse.write(chunk);
-        }
-      });
-      upstream.on('end', () => {
-        if (!clientResponse.destroyed) {
-          clientResponse.end();
-        }
-        resolve();
-      });
+      upstream.on('data', chunk => { if (!clientResponse.destroyed) clientResponse.write(chunk); });
+      upstream.on('end', () => { if (!clientResponse.destroyed) clientResponse.end(); resolve(); });
       upstream.on('error', error => {
         log('ERROR', '流式响应中断：' + error.message);
-        if (!clientResponse.destroyed) {
-          clientResponse.end();
-        }
+        if (!clientResponse.destroyed) clientResponse.end();
         reject(error);
       });
-
-      if (signal) {
-        signal.onAbort = () => {
-          req.destroy();
-          upstream.destroy();
-        };
-      }
+      if (signal) signal.onAbort = () => { req.destroy(); upstream.destroy(); };
     });
-
-    req.setTimeout(120000, () => {
-      req.destroy(new Error('上游聊天请求超时：' + parsed.href));
-    });
-
+    req.setTimeout(120000, () => req.destroy(new Error('上游聊天请求超时：' + parsed.href)));
     req.on('error', reject);
     req.write(body);
     req.end();
   });
+}
+
+async function chat(config, payload, clientResponse, signal, log) {
+  const format = protocols.detect(config, payload.model);
+  if (format === 'chat') return chatCompletions(config, payload, clientResponse, signal, log);
+
+  const isAnthropic = format === 'anthropic';
+  const target = endpointURL(config.baseURL, isAnthropic ? '/v1/messages' : '/v1/responses');
+  const headers = Object.assign({}, config.customHeaders || {}, {
+    'Content-Type': 'application/json',
+    Accept: 'application/json'
+  });
+  if (config.apiKey) {
+    if (isAnthropic) {
+      headers['x-api-key'] = config.apiKey;
+      headers['anthropic-version'] = headers['anthropic-version'] || '2023-06-01';
+    } else {
+      headers.Authorization = 'Bearer ' + config.apiKey;
+    }
+  }
+  const requestBody = isAnthropic
+    ? protocols.anthropicInput(payload)
+    : protocols.responsesInput(payload);
+  let result;
+  try {
+    result = await request(target, { method: 'POST', headers, lookup: ssrf.lookup }, JSON.stringify(requestBody), 120000);
+  } catch (error) {
+    if (log) log('ERROR', format + ' 协议请求失败：' + error.message);
+    throw error;
+  }
+  let upstreamData;
+  try { upstreamData = JSON.parse(result.body); }
+  catch (_) {
+    const error = new Error('上游 ' + format + ' 接口返回的不是有效 JSON：' + result.body.slice(0, 500));
+    error.status = 502;
+    error.url = result.url;
+    throw error;
+  }
+  const normalized = isAnthropic
+    ? protocols.fromAnthropic(upstreamData, payload.model)
+    : protocols.fromResponses(upstreamData, payload.model);
+  const output = payload.stream ? protocols.sseResponse(normalized) : JSON.stringify(normalized);
+  clientResponse.writeHead(200, {
+    'Content-Type': payload.stream ? 'text/event-stream; charset=utf-8' : 'application/json; charset=utf-8',
+    'Cache-Control': payload.stream ? 'no-cache, no-transform' : 'no-store',
+    Connection: payload.stream ? 'keep-alive' : 'close',
+    'X-Accel-Buffering': 'no'
+  });
+  clientResponse.end(output);
+  return;
 }
 
 module.exports = {
