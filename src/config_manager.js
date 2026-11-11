@@ -167,6 +167,8 @@ module.exports = function createConfigManager(root) {
           baseURL: String(item.baseURL || '').slice(0, 2000),
           apiKey: String(item.apiKey || ''),
           model: String(item.model || '').slice(0, 300),
+          apiFormat: ['auto', 'chat', 'responses', 'anthropic'].includes(String(item.apiFormat || 'auto').toLowerCase())
+            ? String(item.apiFormat || 'auto').toLowerCase() : 'auto',
           customHeaders: item.customHeaders &&
             typeof item.customHeaders === 'object' && !Array.isArray(item.customHeaders)
             ? Object.fromEntries(Object.entries(item.customHeaders).filter(([name, headerValue]) =>
