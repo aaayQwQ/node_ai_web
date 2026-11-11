@@ -54,7 +54,8 @@ function anthropicInput(payload) {
   };
   if (system.length) result.system = system.join('\n\n');
   if (payload.temperature !== undefined) result.temperature = payload.temperature;
-  if (payload.top_p !== undefined) result.top_p = payload.top_p;
+  // Anthropic rejects requests that set both temperature and top_p.
+  if (payload.temperature === undefined && payload.top_p !== undefined) result.top_p = payload.top_p;
   if (Array.isArray(payload.tools)) {
     result.tools = payload.tools.filter(tool => tool && tool.function).map(tool => ({
       name: tool.function.name,
