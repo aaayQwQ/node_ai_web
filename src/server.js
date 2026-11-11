@@ -553,6 +553,7 @@ function start(root) {
           baseURL: provider.baseURL,
           apiKey: provider.apiKey,
           model: modelId,
+          apiFormat: provider.apiFormat || 'auto',
           customHeaders: provider.customHeaders || {}
         });
         input.model = modelId;
