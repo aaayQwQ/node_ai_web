@@ -21,6 +21,8 @@ jobs:
           find main.js src tests scripts -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Base URL tests
         run: node tests/base-url.test.js
+      - name: Model protocol adapter tests
+        run: node tests/model-protocols.test.js
       - name: SSRF address tests
         run: node tests/security.test.js
       - name: Configuration encryption tests
